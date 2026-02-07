@@ -6,7 +6,7 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     permissions:
       contents: write
     steps:
@@ -19,17 +19,11 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      - name: Update OS and Install Playwright
+      - name: Install Playwright Browsers & Deps
         run: |
-          # 1. Update the Linux package manager to avoid Code 100
+          sudo rm -f /etc/apt/sources.list.d/microsoft-prod.list
           sudo apt-get update
-          
-          # 2. Run the Playwright installer through Maven
           mvn exec:java -e -D exec.mainClass=com.microsoft.playwright.CLI -D exec.args="install --with-deps"
-          
-          # 3. If Maven fails to install some OS libraries, this forces them
-          # (npx is pre-installed on ubuntu-latest)
-          npx playwright install-deps
 
       - name: Execute Tests
         # Our "Unlimited" command with the 5 Core Variables
