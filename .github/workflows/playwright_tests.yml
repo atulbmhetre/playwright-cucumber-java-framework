@@ -21,7 +21,10 @@ jobs:
 
       - name: Install Playwright Browsers
         # This installs the actual browser engines on the Linux server
-        run: mvn exec:java -e -D exec.mainClass=com.microsoft.playwright.CLI -D exec.args="install --with-deps"
+        run: |
+          mvn exec:java -e -D exec.mainClass=com.microsoft.playwright.CLI -D exec.args="install --with-deps"
+          # If the above fails, this backup command ensures the OS libraries are there
+          npx playwright install-deps
 
       - name: Execute Tests
         # Our "Unlimited" command with the 5 Core Variables
