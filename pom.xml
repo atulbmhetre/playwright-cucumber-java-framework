@@ -92,6 +92,9 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.2.5</version>
                 <configuration>
+                    <!-- This forces all tests in the XML to run sequentially in the SAME JVM -->
+                    <forkCount>0</forkCount>
+                    <reuseForks>false</reuseForks>
 <!--                    <systemPropertyVariables>
                         &lt;!&ndash; This maps your CLI -D to the TestNG engine &ndash;&gt;
                         <dataproviderthreadcount>${dataproviderthreadcount}</dataproviderthreadcount>
