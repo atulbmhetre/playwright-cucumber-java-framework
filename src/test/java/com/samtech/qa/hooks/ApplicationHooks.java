@@ -21,6 +21,7 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.UUID;
 
 public class ApplicationHooks {
     private TestContext testContext;
@@ -30,32 +31,55 @@ public class ApplicationHooks {
     }
 
     private void takeScreenshot(Scenario scenario, String prefix) {
-        testContext.getPage().waitForLoadState(LoadState.NETWORKIDLE);
-        byte[] screenshot = testContext.getPage().screenshot(new Page.ScreenshotOptions()
-                .setFullPage(true)
-                .setTimeout(5000));
-        String attachmentName = prefix + " - " + scenario.getStatus();
-        scenario.attach(screenshot, "image/png", attachmentName);
+        try {
+            Page page = testContext.getPage();
+
+            page.waitForLoadState(LoadState.LOAD, new Page.WaitForLoadStateOptions().setTimeout(5000));
+
+            page.evaluate("() => window.scrollTo(0, document.body.scrollHeight)");
+            page.evaluate("() => window.scrollTo(0, 0)");
+
+            page.waitForTimeout(500);
+
+            byte[] screenshot = page.screenshot(new Page.ScreenshotOptions()
+                    .setFullPage(true)
+                    .setTimeout(15000)); // Stitching long pages takes time
+
+            scenario.attach(screenshot, "image/png", prefix + " - " + scenario.getStatus());
+
+        } catch (Exception e) {
+            logger.warn("Headed capture failed: " + e.getMessage());
+            // Fallback: Just grab what's on screen if stitching fails
+            byte[] fallback = testContext.getPage().screenshot(new Page.ScreenshotOptions().setFullPage(false));
+            scenario.attach(fallback, "image/png", prefix + " (Visible Area Only)");
+        }
     }
+
+
     @Before(order = 0)
     public void setupScenario(Scenario scenario) {
         testContext.setScenarioName(scenario.getName());
         FailedLocatorCollector.setScenarioName(scenario.getName());
         logger.info("SCENARIO STARTED: {}",scenario.getName());
     }
+
     @Before(order = 1)
     public void startTrace() {
+        Page page = testContext.getPage();
         // Start tracing before the test begins
-        DriverFactory.getTlBrowserContext().get().tracing().start(new Tracing.StartOptions()
+        page.context().tracing().start(new Tracing.StartOptions()
                 .setScreenshots(true)
                 .setSnapshots(true)
                 .setSources(true)); // Captures your source code too!
     }
+
     @AfterStep
     public void afterStepHook(Scenario scenario) {
-        if (Boolean.parseBoolean(ConfigLoader.getInstance().getProperty("screenshot.for.step"))) {
-            takeScreenshot(scenario, "Step Screenshot");
-            logger.debug("Screenshot for test step captured.");
+        String captureStep = ConfigLoader.getInstance().getProperty("screenshot.for.step", "false");
+        if (testContext.getPage() != null && !testContext.getPage().isClosed()) {
+            byte[] screenshot = testContext.getPage().screenshot(new Page.ScreenshotOptions().setFullPage(false));
+            Allure.addAttachment("Step Screenshot", "image/png",
+                    new java.io.ByteArrayInputStream(screenshot), ".png");
         }
     }
 
@@ -80,7 +104,7 @@ public class ApplicationHooks {
 
     @After(order = 2)
     public void captureTrace(Scenario scenario) {
-        BrowserContext context = DriverFactory.getTlBrowserContext().get();
+        BrowserContext context = testContext.getDriverFactory().getTlBrowserContext().get();
 
         if (scenario.isFailed()) {
             Path tracePath = Paths.get("test-output/traces/" + scenario.getName().replaceAll("\\W+", "_") + ".zip");
@@ -101,7 +125,7 @@ public class ApplicationHooks {
     public void captureVideo(Scenario scenario) {
         Path videoPath = testContext.getPage().video().path();
         testContext.getPage().close();
-        DriverFactory.getTlBrowserContext().get().close();
+        testContext.getDriverFactory().getTlBrowserContext().get().close();
         if (scenario.isFailed()) {
             try {
                 Allure.addAttachment("Execution Video", "video/webm",
@@ -124,6 +148,7 @@ public class ApplicationHooks {
         logger.info("SCENARIO FINISHED: {} | Status: {}", scenario.getName(), scenario.getStatus());
         testContext.getDriverFactory().closePlaywright();
     }
+
     @AfterSuite
     public void tearDownSuite() {
         FailedLocatorCollector.generateJsonReport();

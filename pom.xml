@@ -13,11 +13,10 @@
         <maven.compiler.target>21</maven.compiler.target>
         <aspectj.version>1.9.20.1</aspectj.version>
         <allure.version>2.24.0</allure.version>
-<!--        <dataproviderthreadcount>1</dataproviderthreadcount>-->
     </properties>
 
     <dependencies>
-        <!-- Your existing Playwright & Cucumber -->
+        <!-- Playwright & Cucumber -->
         <dependency>
             <groupId>com.microsoft.playwright</groupId>
             <artifactId>playwright</artifactId>
@@ -47,17 +46,11 @@
         <!-- Allure Dependencies -->
         <dependency>
             <groupId>io.qameta.allure</groupId>
-            <artifactId>allure-testng</artifactId>
-            <version>${allure.version}</version>
-        </dependency>
-        <!-- ADDED: The specific bridge for Cucumber -->
-        <dependency>
-            <groupId>io.qameta.allure</groupId>
             <artifactId>allure-cucumber7-jvm</artifactId>
             <version>${allure.version}</version>
         </dependency>
 
-        <!-- Your existing Data & Logging -->
+        <!-- Data & Logging -->
         <dependency>
             <groupId>org.apache.poi</groupId>
             <artifactId>poi-ooxml</artifactId>
@@ -92,29 +85,24 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.2.5</version>
                 <configuration>
-                    <!-- This forces all tests in the XML to run sequentially in the SAME JVM -->
-                    <forkCount>0</forkCount>
-                    <reuseForks>false</reuseForks>
-<!--                    <systemPropertyVariables>
-                        &lt;!&ndash; This maps your CLI -D to the TestNG engine &ndash;&gt;
-                        <dataproviderthreadcount>${dataproviderthreadcount}</dataproviderthreadcount>
-                    </systemPropertyVariables>
-                    <properties>
-                        <property>
-                            <name>dataproviderthreadcount</name>
-                            <value>${dataproviderthreadcount}</value>
-                        </property>
-                    </properties>-->
-                    <suiteXmlFiles>
-                        <suiteXmlFile>src/test/resources/testng.xml</suiteXmlFile>
-                    </suiteXmlFiles>
                     <argLine>
                         -javaagent:"${settings.localRepository}/org/aspectj/aspectjweaver/${aspectj.version}/aspectjweaver-${aspectj.version}.jar"
                     </argLine>
-                    <testFailureIgnore>false</testFailureIgnore>
+                    <systemPropertyVariables>
+                        <allure.results.directory>${project.build.directory}/allure-results</allure.results.directory>
+                        <cucumber.testng.retry.count>1</cucumber.testng.retry.count>
+                        <allure.label.historyId>{featureName}-{scenarioName}</allure.label.historyId>
+                    </systemPropertyVariables>
+                    <properties>
+                        <property>
+                            <!-- This is the ONLY way to lock TestNG to 1 browser when using Maven -->
+                            <name>dataproviderthreadcount</name>
+                            <value>1</value>
+                        </property>
+                    </properties>
+                    <testFailureIgnore>true</testFailureIgnore>
                 </configuration>
                 <dependencies>
-                    <!-- AspectJ Weaver must be inside the plugin to work as a javaagent -->
                     <dependency>
                         <groupId>org.aspectj</groupId>
                         <artifactId>aspectjweaver</artifactId>
@@ -122,6 +110,48 @@
                     </dependency>
                 </dependencies>
             </plugin>
+
+
+            <!--            <plugin>
+                            <groupId>org.apache.maven.plugins</groupId>
+                            <artifactId>maven-surefire-plugin</artifactId>
+                            <version>3.2.5</version>
+                            <configuration>
+                                &lt;!&ndash; FORK SETTINGS: Required for AspectJ Weaver to load properly &ndash;&gt;
+                                <forkCount>1</forkCount>
+                                <reuseForks>true</reuseForks>
+
+                                <suiteXmlFiles>
+                                    <suiteXmlFile>src/test/resources/testng.xml</suiteXmlFile>
+                                </suiteXmlFiles>
+                                <properties>
+                                    <property>
+                                        <name>listener</name>
+                                        <value>io.qameta.allure.testng.AllureTestNg</value>
+                                    </property>
+                                </properties>
+                                <argLine>
+                                    -javaagent:"${settings.localRepository}/org/aspectj/aspectjweaver/${aspectj.version}/aspectjweaver-${aspectj.version}.jar"
+                                </argLine>
+
+                                <systemPropertyVariables>
+                                    &lt;!&ndash; This forces a unique file for every single scenario attempt &ndash;&gt;
+                                    <allure.results.directory>${project.build.directory}/allure-results</allure.results.directory>
+                                    <allure.tests.management.enabled>false</allure.tests.management.enabled>
+                                    <allure.random.uuid>true</allure.random.uuid>
+                                </systemPropertyVariables>
+
+                                &lt;!&ndash; Continue with second runner even if first runner has failures &ndash;&gt;
+                                <testFailureIgnore>true</testFailureIgnore>
+                            </configuration>
+                            <dependencies>
+                                <dependency>
+                                    <groupId>org.aspectj</groupId>
+                                    <artifactId>aspectjweaver</artifactId>
+                                    <version>${aspectj.version}</version>
+                                </dependency>
+                            </dependencies>
+                        </plugin>-->
         </plugins>
     </build>
 </project>

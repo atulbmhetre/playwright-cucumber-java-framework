@@ -9,13 +9,11 @@
 //import java.io.File;
 //
 //@CucumberOptions(
-//        features = "@target/failed_scenarios.txt", // Note the '@' - it reads the file content
+//        features = "@target/failed_scenarios.txt",
 //        glue = {"com.samtech.qa.stepdefinitions", "com.samtech.qa.hooks"},
 //        plugin = {
 //                "pretty",
-//                "io.qameta.allure.cucumber7jvm.AllureCucumber7Jvm",
-//                "html:target/cucumber-reports/cucumber.html",
-//                "json:target/cucumber-reports/cucumber.json",
+//                "summary"
 //        }
 //)
 //public class FailedTestRunner extends AbstractTestNGCucumberTests {
@@ -33,6 +31,10 @@
 //    @Override
 //    @DataProvider(parallel = true)
 //    public Object[][] scenarios() {
+//        File rerunFile = new File("target/failed_scenarios.txt");
+//        if (!rerunFile.exists() || rerunFile.length() == 0) {
+//            return new Object[0][0]; // Returns nothing to run if file is missing/empty
+//        }
 //        return super.scenarios();
 //    }
 //}

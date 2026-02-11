@@ -18,16 +18,16 @@ public class DriverFactory {
     private static ThreadLocal<BrowserContext> tlBrowserContext = new ThreadLocal<>();
     private static ThreadLocal<Page> tlPage = new ThreadLocal<>();
 
-    public static ThreadLocal<Playwright> getTlPlaywright() {
+    public ThreadLocal<Playwright> getTlPlaywright() {
         return tlPlaywright;
     }
-    public static ThreadLocal<Browser> getTlBrowser() {
+    public ThreadLocal<Browser> getTlBrowser() {
         return tlBrowser;
     }
-    public static ThreadLocal<BrowserContext> getTlBrowserContext() {
+    public ThreadLocal<BrowserContext> getTlBrowserContext() {
         return tlBrowserContext;
     }
-    public static ThreadLocal<Page> getTlPage() {
+    public ThreadLocal<Page> getTlPage() {
         return tlPage;
     }
 

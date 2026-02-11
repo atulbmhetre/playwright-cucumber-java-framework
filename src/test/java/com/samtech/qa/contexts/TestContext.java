@@ -12,17 +12,23 @@ public class TestContext {
     private String scenarioName;
     public TestContext() {
         this.driverFactory = new DriverFactory();
-        this.page = driverFactory.initPlaywright();
-        this.elementUtils = new ElementUtils(page);
     }
 
     public DriverFactory getDriverFactory() {
         return driverFactory;
     }
     public Page getPage() {
-        return page;
+        // If the page isn't open yet, open it now (Lazy Initialization)
+        if (this.page == null) {
+            this.page = driverFactory.initPlaywright();
+            this.elementUtils = new ElementUtils(this.page);
+        }
+        return this.page;
     }
     public ElementUtils getElementUtils() {
+        if (this.elementUtils == null) {
+            getPage();
+        }
         return elementUtils;
     }
     public void setScenarioName(String name) {
