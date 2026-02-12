@@ -52,7 +52,7 @@ public class ConfigLoader {
     public String getProperty(String key) {
         String propValue = properties.getProperty(key);
         if (propValue == null)
-            logger.error("Warning : Property " + key + " is missing.");
+            logger.warn("Warning : Property " + key + " is missing.");
         return properties.getProperty(key);
     }
     public String getProperty(String key, String defaultValue) {

@@ -20,7 +20,7 @@ import java.util.Date;
 
 @CucumberOptions(features = "src/test/resources/features",
         glue = {"com.samtech.qa.stepdefinitions", "com.samtech.qa.hooks"},
-        tags = "@smoke",
+        tags = "@abcd",
         plugin = {
                 "pretty",
                 "io.qameta.allure.cucumber7jvm.AllureCucumber7Jvm",

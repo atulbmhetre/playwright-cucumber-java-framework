@@ -12,11 +12,11 @@ import java.util.Arrays;
 
 public class DriverFactory {
 
-    private static final Logger logger = LoggerFactory.getLogger(DriverFactory.class);
-    private static ThreadLocal<Playwright> tlPlaywright = new ThreadLocal<>();
-    private static ThreadLocal<Browser> tlBrowser = new ThreadLocal<>();
-    private static ThreadLocal<BrowserContext> tlBrowserContext = new ThreadLocal<>();
-    private static ThreadLocal<Page> tlPage = new ThreadLocal<>();
+    private final Logger logger = LoggerFactory.getLogger(DriverFactory.class);
+    private ThreadLocal<Playwright> tlPlaywright = new ThreadLocal<>();
+    private ThreadLocal<Browser> tlBrowser = new ThreadLocal<>();
+    private ThreadLocal<BrowserContext> tlBrowserContext = new ThreadLocal<>();
+    private ThreadLocal<Page> tlPage = new ThreadLocal<>();
 
     public ThreadLocal<Playwright> getTlPlaywright() {
         return tlPlaywright;

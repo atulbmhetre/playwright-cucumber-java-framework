@@ -75,11 +75,11 @@ public class ApplicationHooks {
 
     @AfterStep
     public void afterStepHook(Scenario scenario) {
-        String captureStep = ConfigLoader.getInstance().getProperty("screenshot.for.step", "false");
-        if (testContext.getPage() != null && !testContext.getPage().isClosed()) {
+        boolean captureStep = Boolean.parseBoolean(ConfigLoader.getInstance().getProperty("screenshot.for.step", "false"));
+        testContext.getPage().waitForTimeout(500);
+        if (captureStep && testContext.getPage() != null && !testContext.getPage().isClosed()) {
             byte[] screenshot = testContext.getPage().screenshot(new Page.ScreenshotOptions().setFullPage(false));
-            Allure.addAttachment("Step Screenshot", "image/png",
-                    new java.io.ByteArrayInputStream(screenshot), ".png");
+            Allure.addAttachment("Step Screenshot", "image/png", new java.io.ByteArrayInputStream(screenshot), ".png");
         }
     }
 
