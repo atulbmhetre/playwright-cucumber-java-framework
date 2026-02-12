@@ -5,8 +5,10 @@ import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Tracing;
 import com.microsoft.playwright.Video;
 import com.microsoft.playwright.options.LoadState;
+import com.microsoft.playwright.options.WaitForSelectorState;
 import com.samtech.qa.contexts.TestContext;
 import com.samtech.qa.factory.DriverFactory;
+import com.samtech.qa.testutilities.TestProofsCollection;
 import com.samtech.qa.utils.ConfigLoader;
 import com.samtech.qa.utils.FailedLocatorCollector;
 import io.cucumber.java.*;
@@ -26,7 +28,8 @@ import java.util.UUID;
 public class ApplicationHooks {
     private TestContext testContext;
     private static final Logger logger = LoggerFactory.getLogger(ApplicationHooks.class);
-    public ApplicationHooks(TestContext testContext) {
+
+    public ApplicationHooks(TestContext testContext, TestProofsCollection stepHelper) {
         this.testContext = testContext;
     }
 
@@ -34,7 +37,7 @@ public class ApplicationHooks {
         try {
             Page page = testContext.getPage();
 
-            page.waitForLoadState(LoadState.LOAD, new Page.WaitForLoadStateOptions().setTimeout(5000));
+            page.waitForLoadState(LoadState.LOAD, new Page.WaitForLoadStateOptions().setTimeout(Long.parseLong(ConfigLoader.getInstance().getProperty("timeout.page.load"))));
 
             page.evaluate("() => window.scrollTo(0, document.body.scrollHeight)");
             page.evaluate("() => window.scrollTo(0, 0)");
@@ -73,18 +76,8 @@ public class ApplicationHooks {
                 .setSources(true)); // Captures your source code too!
     }
 
-    @AfterStep
-    public void afterStepHook(Scenario scenario) {
-        boolean captureStep = Boolean.parseBoolean(ConfigLoader.getInstance().getProperty("screenshot.for.step", "false"));
-        testContext.getPage().waitForTimeout(500);
-        if (captureStep && testContext.getPage() != null && !testContext.getPage().isClosed()) {
-            byte[] screenshot = testContext.getPage().screenshot(new Page.ScreenshotOptions().setFullPage(false));
-            Allure.addAttachment("Step Screenshot", "image/png", new java.io.ByteArrayInputStream(screenshot), ".png");
-        }
-    }
-
     @After(order = 3)
-    public void captureScreenshot(Scenario scenario) {
+    public void captureScenarioScreenshot(Scenario scenario) {
         Status status = scenario.getStatus();
         boolean shouldCapture = false;
 

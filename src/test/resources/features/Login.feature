@@ -4,12 +4,12 @@ Feature: User Authentication
   Background:
     Given the user is on the login page
 
-  @smoke
+  @smoke @abcd
   Scenario: Successful login with admin credentials
     When the user logs into the application with user credentials
     Then the user should see the "Dashboard" overview
 
-  @smoke @abcd
+  @smoke
   Scenario: Invalid login using direct feature data
     When the user logs into the application with username "InvalidUser" and password "WrongPass123"
     Then the user should see the "Invalid credentials" error message

@@ -1,15 +1,13 @@
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
 <suite name="OrangeHRM Suite">
-    <listeners>
-        <listener class-name="com.samtech.qa.testutilities.AnnotationTransformer"/>
-    </listeners>
     <test name="Regression Tests">
         <classes>
             <class name="com.samtech.qa.runners.TestRunner"/>
         </classes>
     </test>
-<!--    <test name="Retry Failed Tests">-->
-<!--        <classes>-->
-<!--            <class name="com.samtech.qa.runners.FailedTestRunner"/>-->
-<!--        </classes>-->
-<!--    </test>-->
+    <test name="Retry Failed Tests">
+        <classes>
+            <class name="com.samtech.qa.runners.FailedTestRunner"/>
+        </classes>
+    </test>
 </suite>

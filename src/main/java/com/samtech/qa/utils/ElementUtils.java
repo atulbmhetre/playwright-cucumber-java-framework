@@ -3,6 +3,7 @@ package com.samtech.qa.utils;
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.options.LoadState;
+import com.microsoft.playwright.options.WaitForSelectorState;
 import com.microsoft.playwright.options.WaitUntilState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,6 +31,7 @@ public class ElementUtils {
                 Locator locator = page.locator(selector);
                 locator.waitFor(new Locator.WaitForOptions().setTimeout(fallbackWait));
                 locator.click();
+                waitForPageLoad();
                 logger.debug("clicked element with selector: {}", selector);
                 success = true;
                 break;
@@ -64,6 +66,7 @@ public class ElementUtils {
     }
 
     public String getElementText(String... selectors) {
+        waitForPageLoad();
         double fallbackTimeout = getTimeout() / 3;
         for (String selector : selectors) {
             try {
@@ -83,8 +86,9 @@ public class ElementUtils {
     public boolean isElementVisible(String... selectors) {
         for (String selector : selectors) {
             try {
+                waitForPageLoad();
                 // This is the key: Force Playwright to wait up to 5s for each locator
-                page.locator(selector).waitFor(new Locator.WaitForOptions().setTimeout(5000));
+                page.locator(selector).waitFor(new Locator.WaitForOptions().setTimeout(Long.parseLong(ConfigLoader.getInstance().getProperty("timeout.global.wait"))));
                 return true;
             } catch (Exception e) {
                 // Log to JSON and try the next fallback
@@ -120,6 +124,28 @@ public class ElementUtils {
     public void waitForPageLoad() {
         page.waitForLoadState(LoadState.DOMCONTENTLOADED, new Page.WaitForLoadStateOptions()
                 .setTimeout(Long.parseLong(ConfigLoader.getInstance().getProperty("timeout.page.load"))));
+    }
+
+    public void waitForPageStable() {
+
+        try {
+            // 1. Ensure DOM is attached
+            page.waitForSelector("body",
+                    new Page.WaitForSelectorOptions()
+                            .setState(WaitForSelectorState.VISIBLE)
+                            .setTimeout(Long.parseLong(ConfigLoader.getInstance().getProperty("timeout.global.wait"))));
+
+            // 2. Wait for network to settle (best effort)
+            page.waitForLoadState(LoadState.NETWORKIDLE,
+                    new Page.WaitForLoadStateOptions()
+                            .setTimeout(Long.parseLong(ConfigLoader.getInstance().getProperty("timeout.page.load"))));
+
+        } catch (Exception e) {
+            System.out.println("Network idle not reached, continuing...");
+        }
+
+        // 3. Small render stabilization buffer (important for SPA paint cycle)
+        page.waitForTimeout(200);
     }
 
     public String getPageTitle() {

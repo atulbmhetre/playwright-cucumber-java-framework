@@ -13,6 +13,7 @@
         <maven.compiler.target>21</maven.compiler.target>
         <aspectj.version>1.9.20.1</aspectj.version>
         <allure.version>2.24.0</allure.version>
+        <parallel.thread.count>1</parallel.thread.count> <!-- default -->
     </properties>
 
     <dependencies>
@@ -90,17 +91,16 @@
                     </argLine>
                     <systemPropertyVariables>
                         <allure.results.directory>${project.build.directory}/allure-results</allure.results.directory>
-                        <cucumber.testng.retry.count>1</cucumber.testng.retry.count>
-                        <allure.label.historyId>{featureName}-{scenarioName}</allure.label.historyId>
                     </systemPropertyVariables>
+                    <suiteXmlFiles>
+                        <suiteXmlFile>src/test/resources/testng.xml</suiteXmlFile>
+                    </suiteXmlFiles>
                     <properties>
                         <property>
-                            <!-- This is the ONLY way to lock TestNG to 1 browser when using Maven -->
                             <name>dataproviderthreadcount</name>
-                            <value>1</value>
+                            <value>${parallel.thread.count}</value>
                         </property>
                     </properties>
-                    <testFailureIgnore>true</testFailureIgnore>
                 </configuration>
                 <dependencies>
                     <dependency>
@@ -110,48 +110,6 @@
                     </dependency>
                 </dependencies>
             </plugin>
-
-
-            <!--            <plugin>
-                            <groupId>org.apache.maven.plugins</groupId>
-                            <artifactId>maven-surefire-plugin</artifactId>
-                            <version>3.2.5</version>
-                            <configuration>
-                                &lt;!&ndash; FORK SETTINGS: Required for AspectJ Weaver to load properly &ndash;&gt;
-                                <forkCount>1</forkCount>
-                                <reuseForks>true</reuseForks>
-
-                                <suiteXmlFiles>
-                                    <suiteXmlFile>src/test/resources/testng.xml</suiteXmlFile>
-                                </suiteXmlFiles>
-                                <properties>
-                                    <property>
-                                        <name>listener</name>
-                                        <value>io.qameta.allure.testng.AllureTestNg</value>
-                                    </property>
-                                </properties>
-                                <argLine>
-                                    -javaagent:"${settings.localRepository}/org/aspectj/aspectjweaver/${aspectj.version}/aspectjweaver-${aspectj.version}.jar"
-                                </argLine>
-
-                                <systemPropertyVariables>
-                                    &lt;!&ndash; This forces a unique file for every single scenario attempt &ndash;&gt;
-                                    <allure.results.directory>${project.build.directory}/allure-results</allure.results.directory>
-                                    <allure.tests.management.enabled>false</allure.tests.management.enabled>
-                                    <allure.random.uuid>true</allure.random.uuid>
-                                </systemPropertyVariables>
-
-                                &lt;!&ndash; Continue with second runner even if first runner has failures &ndash;&gt;
-                                <testFailureIgnore>true</testFailureIgnore>
-                            </configuration>
-                            <dependencies>
-                                <dependency>
-                                    <groupId>org.aspectj</groupId>
-                                    <artifactId>aspectjweaver</artifactId>
-                                    <version>${aspectj.version}</version>
-                                </dependency>
-                            </dependencies>
-                        </plugin>-->
         </plugins>
     </build>
 </project>

@@ -5,6 +5,8 @@ import com.samtech.qa.utils.ElementUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.channels.Selector;
+
 public class LoginPage extends BasePage{
 
     private static final Logger logger = LoggerFactory.getLogger(LoginPage.class);
@@ -23,6 +25,7 @@ public class LoginPage extends BasePage{
     public void navigetToApplication(){
         String url = ConfigLoader.getInstance().getProperty("url");
         navigateTo(url);
+        elementUtils.waitForPageStable();
     }
     public void enterCredentials(String user, String pass) {
         // We pass the whole array to our ElementUtils
@@ -32,6 +35,7 @@ public class LoginPage extends BasePage{
 
     public void clickLogin() {
         elementUtils.clickElement(loginButton);
+        elementUtils.waitForPageStable();
     }
 
     public String getErrorMessage() {

@@ -4,6 +4,8 @@ import com.samtech.qa.contexts.TestContext;
 import com.samtech.qa.contexts.TestContext;
 import com.samtech.qa.pages.DashboardPage;
 import com.samtech.qa.pages.LoginPage;
+import com.samtech.qa.testutilities.TestProofsCollection;
+import com.samtech.qa.testutilities.stepStatus;
 import com.samtech.qa.utils.ConfigLoader;
 import com.samtech.qa.utils.ExcelUtility.DataManager;
 import io.cucumber.java.en.Given;
@@ -20,6 +22,7 @@ public class LoginSteps {
     private final LoginPage loginPage;
     private final DashboardPage dashboardPage;
     private static final Logger logger = LoggerFactory.getLogger(LoginSteps.class);
+    private TestProofsCollection tc;
 
     // Modern Injection via PicoContainer
     public LoginSteps(TestContext testContext) {
@@ -27,6 +30,7 @@ public class LoginSteps {
         // Initializing pages using the shared ElementUtils from context
         this.loginPage = new LoginPage(testContext.getElementUtils());
         this.dashboardPage = new DashboardPage(testContext.getElementUtils());
+        tc = new TestProofsCollection(testContext);
     }
 
     @Given("the user is on the login page")
@@ -37,13 +41,19 @@ public class LoginSteps {
 
     @When("the user logs into the application with user credentials")
     public void logsInWithValidCredentials() {
-        String scenarioName = testContext.getScenarioName();
-        Map<String, String> testData = DataManager.getTestData("Login", scenarioName);
-        String user = testData.get("Username");
-        String pass = testData.get("Password");
-        loginPage.enterCredentials(user, pass);
-        loginPage.clickLogin();
-        logger.info("User logs in to application using user name : {}, password : {}", user, pass);
+        try{
+            String scenarioName = testContext.getScenarioName();
+            Map<String, String> testData = DataManager.getTestData("Login", scenarioName);
+            String user = testData.get("Username");
+            String pass = testData.get("Password");
+            loginPage.enterCredentials(user, pass);
+            loginPage.clickLogin();
+            logger.info("User logs in to application using user name : {}, password : {}", user, pass);
+            tc.attachStepArtifacts(stepStatus.PASSED);
+        }catch (Throwable t){
+            tc.attachStepArtifacts(stepStatus.FAILED);
+            throw t;
+        }
 
     }
 
@@ -58,11 +68,17 @@ public class LoginSteps {
 
     @Then("the user should see the {string} overview1")
     public void verifyDashboardRedirection1(String expectedHeader) {
-        Assert.assertTrue(false, "Dashboard failed to load!");
-        logger.info("Dashboard page is visible.");
-        String actualHeader = dashboardPage.getHeaderText();
-        Assert.assertEquals(actualHeader, expectedHeader, "Header title mismatch on Dashboard!");
-        logger.info("Dashboard title is as expected.");
+        try {
+            Assert.assertTrue(false, "Dashboard failed to load!");
+            logger.info("Dashboard page is visible.");
+            String actualHeader = dashboardPage.getHeaderText();
+            Assert.assertEquals(actualHeader, expectedHeader, "Header title mismatch on Dashboard!");
+            logger.info("Dashboard title is as expected.");
+            tc.attachStepArtifacts(stepStatus.PASSED);
+        }catch (Throwable t){
+            tc.attachStepArtifacts(stepStatus.FAILED);
+            throw t;
+        }
     }
 
     @When("the user logs into the application with username {string} and password {string}")
