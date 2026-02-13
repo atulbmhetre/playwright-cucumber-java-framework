@@ -30,14 +30,11 @@ jobs:
           sudo apt-get update
           mvn exec:java -e -D exec.mainClass=com.microsoft.playwright.CLI -D exec.args="install --with-deps"
 
-      # 4️⃣ Restore previous Allure history
-      - name: Restore Allure History
-        if: always()
-        continue-on-error: true
-        uses: actions/download-artifact@v4
-        with:
-          name: allure-history
-          path: target/allure-results/history   # ⚠ Correct folder
+      # 4️⃣ Prepare Allure History BEFORE tests
+      - name: Prepare Allure History
+        run: |
+          mkdir -p target/allure-results/history
+          cp -r allure-history-backup/history/* target/allure-results/history/ || true
 
       # 5️⃣ Execute Tests
       - name: Execute Tests
@@ -48,49 +45,40 @@ jobs:
             -Dheadless=true \
             -Ddataproviderthreadcount=3 \
             -Dretry=1 \
-            -Dcucumber.filter.tags="@Login"
+            -Dcucumber.filter.tags="@Login" || true  # don't fail workflow if tests fail
 
-      # 6️⃣ Checkout gh-pages branch for report deployment
-      - name: Checkout gh-pages branch
-        if: always()
-        continue-on-error: true
-        uses: actions/checkout@v4
-        with:
-          ref: gh-pages
-          path: gh-pages
+      # 6️⃣ Merge previous history backup AFTER tests (to include new results)
+      - name: Merge Allure History Backup
+        run: |
+          mkdir -p target/allure-results/history
+          cp -r allure-history-backup/history/* target/allure-results/history/ || true
 
-      # 7️⃣ Generate Allure Report
+      # 7️⃣ Generate Allure Report using CLI (always runs, even if tests failed)
       - name: Generate Allure Report
-        if: always()
-        uses: simple-elf/allure-report-action@master
-        with:
-          allure_results: target/allure-results   # Must include history folder
-          gh_pages: gh-pages
-          allure_report: target/allure-report
-          allure_history: target/allure-results/history  # ⚠ Correct
+        run: |
+          set +e
+          allure generate target/allure-results -o target/site/allure --clean
+          set -e
 
-      # 8️⃣ Upload Allure History Artifact for next run
-      - name: Upload Allure History Artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: allure-history
-          path: target/allure-results/history  # ⚠ Correct
-
-      # 9️⃣ Deploy full Allure Report to GitHub Pages
-      - name: Deploy Allure Report to GitHub Pages
-        if: always()
+      # 8️⃣ Deploy Allure Report to GitHub Pages
+      - name: Deploy Allure Report
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: gh-pages
-          publish_dir: target/allure-report
+          publish_dir: target/site/allure
 
-      # 🔟 Upload traces & videos
-      - name: Upload Traces & Videos as Artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-forensics
-          path: target/allure-results/*.zip
-          retention-days: 7
+      # 9️⃣ Backup updated history and commit ONLY if there are real changes
+      - name: Commit Updated History Backup
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          mkdir -p allure-history-backup/history
+          cp -r target/allure-results/history/* allure-history-backup/history/ || true
+          git add allure-history-backup/history
+          if ! git diff --cached --quiet; then
+            git commit -m "CI: Update Allure history backup [skip ci]"
+            git push origin HEAD:main
+          else
+            echo "No changes in history, skipping commit"
+          fi

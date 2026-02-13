@@ -55,3 +55,6 @@ Thumbs.db
 
 # --- Logs ---
 *.log
+
+# Allure history folder (updates automatically during runs)
+allure-history-backup/history/
