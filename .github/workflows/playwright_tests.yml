@@ -37,11 +37,11 @@ jobs:
           mvn exec:java -e -D exec.mainClass=com.microsoft.playwright.CLI -D exec.args="install --with-deps"
 
       # -----------------------
-      # 4️⃣ Download previous Allure history
+      # 4️⃣ Restore previous Allure history (if any)
       # -----------------------
       - name: Restore Allure History from Previous Run
         if: always()
-        continue-on-error: true
+        continue-on-error: true   # first run will ignore missing artifact
         uses: actions/download-artifact@v4
         with:
           name: allure-history
@@ -61,7 +61,7 @@ jobs:
             -Dcucumber.filter.tags="@Login"
 
       # -----------------------
-      # 6️⃣ Checkout gh-pages branch (for report deployment)
+      # 6️⃣ Checkout gh-pages branch for report deployment
       # -----------------------
       - name: Checkout gh-pages branch
         if: always()
