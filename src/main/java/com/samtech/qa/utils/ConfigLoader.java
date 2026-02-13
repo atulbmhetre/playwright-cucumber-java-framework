@@ -33,6 +33,7 @@ public class ConfigLoader {
                 }
             }
 
+            environment = env;
             // Step 2: Load environment specific file
             FileInputStream fis = new FileInputStream(
                     "src/test/resources/config/" + env + ".config.properties");

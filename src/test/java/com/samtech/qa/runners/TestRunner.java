@@ -1,5 +1,6 @@
 package com.samtech.qa.runners;
 
+import com.samtech.qa.testutilities.AllureEnvironmentManager;
 import com.samtech.qa.utils.ConfigLoader;
 import com.samtech.qa.utils.FailedLocatorCollector;
 import io.cucumber.testng.AbstractTestNGCucumberTests;
@@ -7,6 +8,8 @@ import io.cucumber.testng.CucumberOptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testng.annotations.AfterSuite;
+import org.testng.annotations.BeforeClass;
+import org.testng.annotations.BeforeSuite;
 import org.testng.annotations.DataProvider;
 
 @CucumberOptions(features = "src/test/resources/features",
@@ -36,6 +39,12 @@ public class TestRunner extends AbstractTestNGCucumberTests {
                 System.getProperty("dataproviderthreadcount"));
 
         return super.scenarios();
+    }
+
+    @BeforeSuite(alwaysRun = true)
+    public void setupSuite() {
+        ConfigLoader.getInstance(); // ensure initialized
+        AllureEnvironmentManager.writeEnvironmentInfo();
     }
 
     // This is the ONLY place TestNG will look for @AfterSuite

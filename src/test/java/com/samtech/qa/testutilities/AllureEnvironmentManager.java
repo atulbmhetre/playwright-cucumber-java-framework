@@ -12,7 +12,7 @@ public class AllureEnvironmentManager {
 
         ConfigLoader config = ConfigLoader.getInstance();
 
-        File resultsDir = new File("allure-results");
+        File resultsDir = new File("target/allure-results");
         if (!resultsDir.exists()) {
             resultsDir.mkdirs();
         }
@@ -23,7 +23,7 @@ public class AllureEnvironmentManager {
 
             writer.write("Environment=" + config.getEnvironment() + "\n");
             writer.write("Browser=" + config.getMandatoryProp("browser") + "\n");
-            writer.write("BaseURL=" + config.getMandatoryProp("base.url") + "\n");
+            writer.write("URL=" + config.getMandatoryProp("url") + "\n");
             writer.write("Headless=" + config.getOptionalProp("headless") + "\n");
 
         } catch (IOException e) {

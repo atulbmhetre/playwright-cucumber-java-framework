@@ -17,8 +17,4 @@ public class BasePage {
         page.navigate(url);
         elementUtils.waitForPageLoad();
     }
-    @BeforeSuite
-    public void setupSuite() {
-        AllureEnvironmentManager.writeEnvironmentInfo();
-    }
 }
