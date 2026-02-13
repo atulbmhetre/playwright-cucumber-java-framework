@@ -6,15 +6,20 @@ on:
 
 jobs:
   test:
-    # Using 22.04 as it is the most stable for Playwright 1.40 dependencies
     runs-on: ubuntu-22.04
     permissions:
       contents: write
 
     steps:
+      # -----------------------
+      # 1️⃣ Checkout main code
+      # -----------------------
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      # -----------------------
+      # 2️⃣ Setup JDK 21
+      # -----------------------
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
@@ -22,15 +27,29 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
+      # -----------------------
+      # 3️⃣ Install Playwright Browsers & Dependencies
+      # -----------------------
       - name: Install Playwright Browsers & Deps
         run: |
           sudo rm -f /etc/apt/sources.list.d/microsoft-prod.list
           sudo apt-get update
           mvn exec:java -e -D exec.mainClass=com.microsoft.playwright.CLI -D exec.args="install --with-deps"
 
+      # -----------------------
+      # 4️⃣ Download previous Allure history
+      # -----------------------
+      - name: Restore Allure History from Previous Run
+        if: always()
+        uses: actions/download-artifact@v4
+        with:
+          name: allure-history
+          path: target/allure-results
+
+      # -----------------------
+      # 5️⃣ Execute Tests
+      # -----------------------
       - name: Execute Tests
-        # No 'continue-on-error' here. If a test fails, this step turns RED.
-        # We use xvfb-run in case any part of the framework expects a display
         run: |
           xvfb-run --auto-servernum -- mvn test \
             -Denv=qa \
@@ -40,8 +59,10 @@ jobs:
             -Dretry=1 \
             -Dcucumber.filter.tags="@Login"
 
-      - name: Get Allure History
-        # We always run this to ensure the 'Retries' tab works in the next report
+      # -----------------------
+      # 6️⃣ Checkout gh-pages branch (for report deployment)
+      # -----------------------
+      - name: Checkout gh-pages branch
         if: always()
         continue-on-error: true
         uses: actions/checkout@v4
@@ -49,23 +70,42 @@ jobs:
           ref: gh-pages
           path: gh-pages
 
+      # -----------------------
+      # 7️⃣ Generate Allure Report
+      # -----------------------
       - name: Generate Allure Report
         if: always()
         uses: simple-elf/allure-report-action@master
         with:
           allure_results: target/allure-results
           gh_pages: gh-pages
-          allure_report: allure-report
+          allure_report: target/allure-report
           allure_history: allure-history
 
-      - name: Deploy Report to GitHub Pages
+      # -----------------------
+      # 8️⃣ Upload Allure History for next run
+      # -----------------------
+      - name: Upload Allure History Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-history
+          path: target/allure-report/history
+
+      # -----------------------
+      # 9️⃣ Deploy full Allure Report to GitHub Pages
+      # -----------------------
+      - name: Deploy Allure Report to GitHub Pages
         if: always()
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: gh-pages
-          publish_dir: allure-history
+          publish_dir: target/allure-report
 
+      # -----------------------
+      # 🔟 Upload Traces & Videos as Artifacts
+      # -----------------------
       - name: Upload Traces & Videos as Artifacts
         if: always()
         uses: actions/upload-artifact@v4
