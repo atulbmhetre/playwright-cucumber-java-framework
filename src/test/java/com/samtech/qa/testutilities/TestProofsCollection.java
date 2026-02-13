@@ -39,7 +39,7 @@ public class TestProofsCollection {
             // Decide whether to attach based on step result
             if (status == stepStatus.FAILED) {
                 boolean captureFailed = Boolean.parseBoolean(
-                        ConfigLoader.getInstance().getProperty("screenshot.for.step.failed", "true")
+                        ConfigLoader.getInstance().getOptionalProp("screenshot.for.step.failed")
                 );
                 if (captureFailed) {
                     attachScreenshot();
@@ -47,7 +47,7 @@ public class TestProofsCollection {
                 }
             } else {
                 boolean capturePassed = Boolean.parseBoolean(
-                        ConfigLoader.getInstance().getProperty("screenshot.for.step.passed", "false")
+                        ConfigLoader.getInstance().getOptionalProp("screenshot.for.step.passed")
                 );
                 if (capturePassed) {
                     attachScreenshot();

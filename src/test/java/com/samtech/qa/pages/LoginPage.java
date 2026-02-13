@@ -23,7 +23,7 @@ public class LoginPage extends BasePage{
 
     // 2. Page Actions
     public void navigetToApplication(){
-        String url = ConfigLoader.getInstance().getProperty("url");
+        String url = ConfigLoader.getInstance().getMandatoryProp("url");
         navigateTo(url);
         elementUtils.waitForPageStable();
     }

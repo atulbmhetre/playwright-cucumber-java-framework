@@ -18,7 +18,7 @@ public class ElementUtils {
     }
 
     private double getTimeout() {
-        String timeout = ConfigLoader.getInstance().getProperty("timeout.global.wait","15000");
+        String timeout = ConfigLoader.getInstance().getOptionalProp("timeout.global.wait");
         return Double.parseDouble(timeout);
     }
 
@@ -88,7 +88,7 @@ public class ElementUtils {
             try {
                 waitForPageLoad();
                 // This is the key: Force Playwright to wait up to 5s for each locator
-                page.locator(selector).waitFor(new Locator.WaitForOptions().setTimeout(Long.parseLong(ConfigLoader.getInstance().getProperty("timeout.global.wait"))));
+                page.locator(selector).waitFor(new Locator.WaitForOptions().setTimeout(Long.parseLong(ConfigLoader.getInstance().getOptionalProp("timeout.global.wait"))));
                 return true;
             } catch (Exception e) {
                 // Log to JSON and try the next fallback
@@ -123,7 +123,7 @@ public class ElementUtils {
 
     public void waitForPageLoad() {
         page.waitForLoadState(LoadState.DOMCONTENTLOADED, new Page.WaitForLoadStateOptions()
-                .setTimeout(Long.parseLong(ConfigLoader.getInstance().getProperty("timeout.page.load"))));
+                .setTimeout(Long.parseLong(ConfigLoader.getInstance().getOptionalProp("timeout.page.load"))));
     }
 
     public void waitForPageStable() {
@@ -133,12 +133,12 @@ public class ElementUtils {
             page.waitForSelector("body",
                     new Page.WaitForSelectorOptions()
                             .setState(WaitForSelectorState.VISIBLE)
-                            .setTimeout(Long.parseLong(ConfigLoader.getInstance().getProperty("timeout.global.wait"))));
+                            .setTimeout(Long.parseLong(ConfigLoader.getInstance().getOptionalProp("timeout.global.wait"))));
 
             // 2. Wait for network to settle (best effort)
             page.waitForLoadState(LoadState.NETWORKIDLE,
                     new Page.WaitForLoadStateOptions()
-                            .setTimeout(Long.parseLong(ConfigLoader.getInstance().getProperty("timeout.page.load"))));
+                            .setTimeout(Long.parseLong(ConfigLoader.getInstance().getOptionalProp("timeout.page.load"))));
 
         } catch (Exception e) {
             System.out.println("Network idle not reached, continuing...");

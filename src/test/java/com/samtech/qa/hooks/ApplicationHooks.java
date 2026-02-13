@@ -37,7 +37,7 @@ public class ApplicationHooks {
         try {
             Page page = testContext.getPage();
 
-            page.waitForLoadState(LoadState.LOAD, new Page.WaitForLoadStateOptions().setTimeout(Long.parseLong(ConfigLoader.getInstance().getProperty("timeout.page.load"))));
+            page.waitForLoadState(LoadState.LOAD, new Page.WaitForLoadStateOptions().setTimeout(Long.parseLong(ConfigLoader.getInstance().getOptionalProp("timeout.page.load"))));
 
             page.evaluate("() => window.scrollTo(0, document.body.scrollHeight)");
             page.evaluate("() => window.scrollTo(0, 0)");
@@ -81,11 +81,11 @@ public class ApplicationHooks {
         Status status = scenario.getStatus();
         boolean shouldCapture = false;
 
-        if (status == Status.FAILED && Boolean.parseBoolean(ConfigLoader.getInstance().getProperty("screenshot.on.scenario.failure"))) {
+        if (status == Status.FAILED && Boolean.parseBoolean(ConfigLoader.getInstance().getOptionalProp("screenshot.on.scenario.failure"))) {
             shouldCapture = true;
-        } else if (status == Status.PASSED && Boolean.parseBoolean(ConfigLoader.getInstance().getProperty("screenshot.on.scenario.success"))) {
+        } else if (status == Status.PASSED && Boolean.parseBoolean(ConfigLoader.getInstance().getOptionalProp("screenshot.on.scenario.success"))) {
             shouldCapture = true;
-        } else if (status == Status.SKIPPED && Boolean.parseBoolean(ConfigLoader.getInstance().getProperty("screenshot.on.scenario.skipped"))) {
+        } else if (status == Status.SKIPPED && Boolean.parseBoolean(ConfigLoader.getInstance().getOptionalProp("screenshot.on.scenario.skipped"))) {
             shouldCapture = true;
         }
 

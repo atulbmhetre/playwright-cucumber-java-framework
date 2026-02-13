@@ -32,13 +32,13 @@ public class DriverFactory {
     }
 
     public Page initPlaywright(){
-        String browserName = System.getProperty("browser", ConfigLoader.getInstance().getProperty("browser"));
+        String browserName = System.getProperty("browser", ConfigLoader.getInstance().getMandatoryProp("browser"));
         if (browserName == null || browserName.isEmpty()) {
             logger.error("CRITICAL ERROR: Browser name not specified in Maven flag (-Dbrowser) or config files.");
             throw new RuntimeException("Missing Browser Configuration: Please define 'browser' in your properties or pass it via CLI.");
         }
         logger.debug("Browser set to test on: {}", browserName);
-        Boolean isHeadless = Boolean.parseBoolean(System.getProperty("headless", ConfigLoader.getInstance().getProperty("headless")));
+        Boolean isHeadless = Boolean.parseBoolean(System.getProperty("headless", ConfigLoader.getInstance().getOptionalProp("headless")));
         logger.debug("Headless flag set to: {}", isHeadless);
         tlPlaywright.set(Playwright.create());
         switch (browserName.trim().toLowerCase()){
@@ -80,9 +80,9 @@ public class DriverFactory {
                 new Browser.NewContextOptions().setViewportSize(null)
                         .setRecordVideoDir(Paths.get("test-output/videos/"))
                         .setRecordVideoSize(1280, 720)));
-        PlaywrightAssertions.setDefaultAssertionTimeout(Long.parseLong(ConfigLoader.getInstance().getProperty("timeout.default.assertion","5000")));
-        tlBrowserContext.get().setDefaultTimeout(Long.parseLong(ConfigLoader.getInstance().getProperty("timeout.global.wait","15000")));
-        tlBrowserContext.get().setDefaultNavigationTimeout(Long.parseLong(ConfigLoader.getInstance().getProperty("timeout.page.load", "100000")));
+        PlaywrightAssertions.setDefaultAssertionTimeout(Long.parseLong(ConfigLoader.getInstance().getOptionalProp("timeout.default.assertion")));
+        tlBrowserContext.get().setDefaultTimeout(Long.parseLong(ConfigLoader.getInstance().getOptionalProp("timeout.global.wait")));
+        tlBrowserContext.get().setDefaultNavigationTimeout(Long.parseLong(ConfigLoader.getInstance().getOptionalProp("timeout.page.load")));
         logger.debug("Default Assertion timeout, Global timeout, Navigation timeout set.");
         tlPage.set(tlBrowserContext.get().newPage());
         logger.debug("Browser \"{}\" launched successfully.", browserName);

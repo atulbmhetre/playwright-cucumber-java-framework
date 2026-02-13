@@ -50,13 +50,23 @@ jobs:
       # 6️⃣ Execute Tests
       - name: Execute Tests
         run: |
+          export ENV=qa
+          export BROWSER=chromium
+          export HEADLESS=true
+          
           xvfb-run --auto-servernum -- mvn test \
-            -Denv=qa \
-            -Dbrowser=chromium \
-            -Dheadless=true \
+            -Denv=$ENV \
+            -Dbrowser=$BROWSER \
+            -Dheadless=$HEADLESS \
             -Ddataproviderthreadcount=3 \
             -Dretry=1 \
             -Dcucumber.filter.tags="@Login" || true
+          
+          echo "Browser=$BROWSER" >> target/allure-results/environment.properties
+          echo "Environment=$ENV" >> target/allure-results/environment.properties
+          echo "Headless=$HEADLESS" >> target/allure-results/environment.properties
+          echo "CI=GitHub Actions" >> target/allure-results/environment.properties
+          echo "OS=$(uname -s)" >> target/allure-results/environment.properties
 
       # 7️⃣ Generate Report
       - name: Generate Allure Report

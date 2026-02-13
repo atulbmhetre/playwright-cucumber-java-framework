@@ -29,8 +29,8 @@ public class TestRunner extends AbstractTestNGCucumberTests {
     @DataProvider(parallel = true)
     public Object[][] scenarios() {
         // 1. Read from config.properties
-        String threads = ConfigLoader.getInstance().getProperty("dataproviderthreadcount");
-        System.setProperty("dataproviderthreadcount", (threads != null) ? threads : "1");
+        String threads = ConfigLoader.getInstance().getOptionalProp("dataproviderthreadcount");
+        System.setProperty("dataproviderthreadcount", threads);
 
         logger.info("Framework initialized with Threads: {}",
                 System.getProperty("dataproviderthreadcount"));
