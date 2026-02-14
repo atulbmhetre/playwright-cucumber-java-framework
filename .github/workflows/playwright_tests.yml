@@ -61,26 +61,23 @@ jobs:
           ref: gh-pages
           path: gh-pages
 
-      # 🔟 Ensure allure-results folder exists
-      - name: Ensure allure-results exists
-        run: mkdir -p target/allure-results
-
-      # 1️⃣1️⃣ Restore Allure History
+      # 🔟 Restore Allure History
       - name: Restore Allure History to Results
         run: |
           mkdir -p target/allure-results/history
           cp -r gh-pages/history/* target/allure-results/history/ || true
 
-      # 1️⃣2️⃣ Set Environment Variables for Test Execution
+      # 1️⃣1️⃣ Set Environment Variables for Test Execution
       - name: Set Test Environment Variables
         run: |
           echo "ENV=qa" >> $GITHUB_ENV
           echo "BROWSER=chromium" >> $GITHUB_ENV
           echo "HEADLESS=true" >> $GITHUB_ENV
 
-      # 1️⃣3️⃣ Run Tests with Maven & Xvfb (force continue even if some fail)
+      # 1️⃣2️⃣ Run Tests with Maven & Xvfb
       - name: Execute Regression Tests
         run: |
+          # Always generate results even if tests fail
           xvfb-run --auto-servernum -- mvn test \
             -Denv=$ENV \
             -Dbrowser=$BROWSER \
@@ -89,38 +86,38 @@ jobs:
             -Dretry=1 \
             -Dcucumber.filter.tags="@Login" || true
 
-      # 1️⃣4️⃣ Generate Environment Info for Allure
+      # 1️⃣3️⃣ Generate Environment Info for Allure
       - name: Write Environment Info for Allure
         run: |
+          mkdir -p target/allure-results
           echo "Browser=$BROWSER" >> target/allure-results/environment.properties
           echo "Env=$ENV" >> target/allure-results/environment.properties
 
-      # 1️⃣5️⃣ Collect Allure Results
+      # 1️⃣4️⃣ Collect Allure Results
       - name: Collect Allure Results
         run: |
           mkdir -p artifacts/allure-results
           cp -r target/allure-results/* artifacts/allure-results/
 
-      # 1️⃣6️⃣ Collect Test Output (Failed Locators, JSON, Logs)
+      # 1️⃣5️⃣ Collect Test Output (Failed Locators, JSON, Logs)
       - name: Collect Test Output
         run: |
           mkdir -p artifacts/test-output
           cp -r test-output/* artifacts/test-output/ || true
 
-      # 1️⃣7️⃣ Collect Defect Age CSV
+      # 1️⃣6️⃣ Collect Defect Age CSV
       - name: Collect Defect Age CSV
         run: |
           mkdir -p artifacts/defect-data
           cp target/defect-age.csv artifacts/defect-data/ || true
 
-      # 1️⃣8️⃣ Generate Allure HTML Report
+      # 1️⃣7️⃣ Generate Allure HTML Report (No browser opening)
       - name: Generate Allure HTML Report
         run: |
           allure generate artifacts/allure-results -o artifacts/allure-report --clean
-          # Open in background to avoid blocking
-          nohup allure open artifacts/allure-report &
+          echo "Allure report generated at artifacts/allure-report"
 
-      # 1️⃣9️⃣ Upload Artifacts for Later Download
+      # 1️⃣8️⃣ Upload Artifacts for Later Download
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -131,13 +128,13 @@ jobs:
             artifacts/test-output
             artifacts/defect-data
 
-      # 2️⃣0️⃣ Copy Updated History from Latest Run
+      # 1️⃣9️⃣ Update Allure History for Trends
       - name: Copy Updated History from Latest Run
         run: |
           mkdir -p gh-pages/history
           cp -r artifacts/allure-results/history/* gh-pages/history/ || true
 
-      # 2️⃣1️⃣ Commit & Push Allure History to gh-pages
+      # 2️⃣0️⃣ Commit & Push Allure History to gh-pages
       - name: Commit and Push Allure History
         run: |
           cd gh-pages
