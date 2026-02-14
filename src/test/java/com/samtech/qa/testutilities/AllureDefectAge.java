@@ -24,18 +24,33 @@ public class AllureDefectAge {
         ObjectMapper mapper = new ObjectMapper();
         Map<String, TestHistory> testHistoryMap = new HashMap<>();
 
-        // Read all JSON files
         for (File file : Objects.requireNonNull(folder.listFiles((dir, name) -> name.endsWith(".json")))) {
-            JsonNode node = mapper.readTree(file);
 
-            String historyId = node.get("historyId").asText();
-            String name = node.get("name").asText();
-            String fullName = node.get("fullName").asText();
-            String status = node.get("status").asText();
-            long timestamp = node.has("time") ? node.get("time").asLong() : 0;
+            JsonNode root = mapper.readTree(file);
 
-            testHistoryMap.computeIfAbsent(historyId, k -> new TestHistory(name, fullName))
-                    .addStatus(status, timestamp);
+            Iterator<Map.Entry<String, JsonNode>> fields = root.fields();
+
+            while (fields.hasNext()) {
+                Map.Entry<String, JsonNode> entry = fields.next();
+
+                String historyId = entry.getKey();
+                JsonNode testNode = entry.getValue();
+
+                JsonNode items = testNode.get("items");
+                if (items == null || !items.isArray()) continue;
+
+                TestHistory testHistory = testHistoryMap.computeIfAbsent(
+                        historyId,
+                        k -> new TestHistory(historyId, historyId)
+                );
+
+                for (JsonNode item : items) {
+                    String status = item.get("status").asText();
+                    long timestamp = item.get("time").get("start").asLong();
+
+                    testHistory.addStatus(status, timestamp);
+                }
+            }
         }
 
         List<DefectReport> defectReports = new ArrayList<>();
