@@ -37,37 +37,10 @@ jobs:
       # 4️⃣ Install Allure CLI
       - name: Install Allure CLI
         run: |
-          sudo apt-get update
-          sudo apt-get install -y unzip curl
-          
-          ALLURE_VERSION="2.35.1"
-          DOWNLOAD_URL="https://github.com/allure-framework/allure2/releases/download/${ALLURE_VERSION}/allure-${ALLURE_VERSION}.zip"
-          
-          echo "Downloading Allure CLI from $DOWNLOAD_URL"
-          curl -fL "$DOWNLOAD_URL" -o allure.zip
-          
-          # Validate download is a real zip
-          if ! file allure.zip | grep -q "Zip archive data"; then
-            echo "ERROR: allure.zip is not a valid zip file!"
-            echo "Downloaded content:"
-            cat allure.zip
-            exit 1
-          fi
-          
-          unzip allure.zip
-          
-          # Find the extracted folder (e.g. allure-2.35.1)
-          EXTRACTED_DIR=$(ls -d allure-* 2>/dev/null | head -n 1)
-          if [ -z "$EXTRACTED_DIR" ]; then
-            echo "ERROR: extracted allure directory not found!"
-            ls -la
-            exit 1
-          fi
-          
-          # Move the binary
-          sudo mv "$EXTRACTED_DIR/bin/allure" /usr/local/bin/
-          
-          # Verify
+          wget https://github.com/allure-framework/allure2/releases/download/2.27.0/allure-2.27.0.tgz
+          tar -zxvf allure-2.27.0.tgz
+          sudo mv allure-2.27.0 /opt/allure
+          sudo ln -s /opt/allure/bin/allure /usr/bin/allure
           allure --version
 
       # 5️⃣ Prepare history folder
