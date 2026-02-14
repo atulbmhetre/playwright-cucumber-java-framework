@@ -23,11 +23,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      # 2️⃣ Display Java version (for debugging)
+      # 2️⃣ Display Java version (debugging)
       - name: Display Java Version
         run: java -version
 
-      # 3️⃣ Set up Java environment
+      # 3️⃣ Setup Java 21
       - name: Setup Java 21
         uses: actions/setup-java@v3
         with:
@@ -42,17 +42,17 @@ jobs:
           sudo apt-get install allure -y
           allure --version
 
-      # 5️⃣ Create folder for history
+      # 5️⃣ Prepare history folder
       - name: Prepare History Folder
         run: mkdir -p target/allure-results/history
 
-      # 6️⃣ Fetch existing history from gh-pages branch
+      # 6️⃣ Fetch existing history from gh-pages
       - name: Fetch Existing History from gh-pages
         run: |
           git fetch origin gh-pages
           git checkout gh-pages -- history || echo "No history found"
 
-      # 7️⃣ Copy existing history into current results
+      # 7️⃣ Merge existing history into current results
       - name: Merge Existing History into Allure Results
         run: cp -r history/* target/allure-results/history/ || echo "No previous history to copy"
 
@@ -60,7 +60,7 @@ jobs:
       - name: Display Environment Variables
         run: env | grep -E 'ENV|BROWSER|HEADLESS'
 
-      # 9️⃣ Install Node and Playwright (if needed)
+      # 9️⃣ Install Node & Playwright
       - name: Install Node and Playwright Browsers
         run: |
           curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
@@ -68,7 +68,7 @@ jobs:
           npm install -g playwright
           npx playwright install
 
-      # 🔟 Run Maven Tests
+      # 🔟 Run Maven tests
       - name: Run Test Suite
         run: |
           xvfb-run --auto-servernum -- mvn test \
@@ -87,26 +87,26 @@ jobs:
           cp -r target/allure-results/history allure-history-backup/history-$TIMESTAMP
           echo "Backup created at allure-history-backup/history-$TIMESTAMP"
 
-      # 12️⃣ Clean previous allure report folder (optional)
+      # 12️⃣ Clean previous Allure reports
       - name: Clean Old Allure Reports
         run: rm -rf gh-pages/report-*
 
-      # 13️⃣ Generate timestamp variable for report
+      # 13️⃣ Set timestamp for report (make it available to all steps)
       - name: Set Timestamp for Report
         id: timestamp
         run: echo "REPORT_TS=$(date +'%Y-%m-%d_%H-%M-%S')" >> $GITHUB_ENV
 
       # 14️⃣ Create report folder for current run
       - name: Create Report Folder
-        run: mkdir -p gh-pages/report-$REPORT_TS
+        run: mkdir -p gh-pages/report-${{ env.REPORT_TS }}
 
-      # 15️⃣ Generate Allure HTML Report
+      # 15️⃣ Generate Allure HTML
       - name: Generate Allure HTML
-        run: allure generate target/allure-results -o gh-pages/report-$REPORT_TS --clean
+        run: allure generate target/allure-results -o gh-pages/report-${{ env.REPORT_TS }} --clean
 
       # 16️⃣ List generated report contents
       - name: List Generated Report
-        run: ls -l gh-pages/report-$REPORT_TS
+        run: ls -l gh-pages/report-${{ env.REPORT_TS }}
 
       # 17️⃣ Configure Git for push
       - name: Configure Git
@@ -117,21 +117,21 @@ jobs:
       # 18️⃣ Commit Allure HTML to gh-pages
       - name: Commit Allure Report
         run: |
-          git add gh-pages/report-$REPORT_TS
-          git commit -m "Update Allure report $REPORT_TS" || echo "No changes to commit"
+          git add gh-pages/report-${{ env.REPORT_TS }}
+          git commit -m "Update Allure report ${{ env.REPORT_TS }}" || echo "No changes to commit"
 
       # 19️⃣ Push Allure HTML to gh-pages
       - name: Push Report to GitHub Pages
         run: git push origin gh-pages
 
-      # 20️⃣ Upload Allure results as workflow artifact
+      # 20️⃣ Upload Allure results as artifact
       - name: Upload Allure Results Artifact
         uses: actions/upload-artifact@v3
         with:
           name: allure-results
           path: target/allure-results
 
-      # 21️⃣ Optional: Display GitHub Pages report URL
+      # 21️⃣ Display GitHub Pages report URL
       - name: Display Report URL
-        run:
-          echo "Report URL: https://<your-org-or-user>.github.io/<repo-name>/report-$REPORT_TS"
+        run: |
+          echo "Report URL: https://<your-org-or-user>.github.io/<repo-name>/report-${{ env.REPORT_TS }}"
