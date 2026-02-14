@@ -13,6 +13,8 @@ public class AllureDefectAge {
     private static final String HISTORY_DIR =
             System.getProperty("history.dir", "target/allure-results/history");
     private static final String OUTPUT_FILE = "target/defect-age-report.csv"; // File for CI artifact
+    private static final Set<String> DEFECT_STATUSES =
+            Set.of("failed", "broken");
 
     public static void main(String[] args) throws Exception {
         File folder = Paths.get(HISTORY_DIR).toFile();
@@ -68,7 +70,7 @@ public class AllureDefectAge {
 
             for (int i = statuses.size() - 1; i >= 0; i--) {
                 StatusEntry s = statuses.get(i);
-                if ("failed".equalsIgnoreCase(s.getStatus())) {
+                if (DEFECT_STATUSES.contains(s.getStatus().toLowerCase())) {
                     consecutiveFailures++;
                     lastFailTs = s.getTimestamp();
                     firstFailTs = s.getTimestamp(); // will update as we move backwards
