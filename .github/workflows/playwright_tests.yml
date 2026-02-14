@@ -114,9 +114,9 @@ jobs:
           echo "====== GENERATING DEFECT AGE REPORT ======"
           mvn test-compile exec:java \
             -Dexec.mainClass=com.samtech.qa.testutilities.AllureDefectAge \
-            -Dexec.classpathScope=test
+            -Dexec.classpathScope=test \
+            -Dhistory.dir=temp-report-${{ env.REPORT_TS }}/history
           echo "====== DEFECT AGE REPORT GENERATED ======"
-          ls -la target/defect-age-report.csv || echo "Defect CSV not found"
 
       # 1️⃣7️⃣ List generated report contents
       - name: List Generated Report

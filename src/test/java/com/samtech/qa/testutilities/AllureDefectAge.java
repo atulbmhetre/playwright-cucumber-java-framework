@@ -10,7 +10,8 @@ import java.util.*;
 
 public class AllureDefectAge {
 
-    private static final String HISTORY_DIR = "target/allure-results/history";
+    private static final String HISTORY_DIR =
+            System.getProperty("history.dir", "target/allure-results/history");
     private static final String OUTPUT_FILE = "target/defect-age-report.csv"; // File for CI artifact
 
     public static void main(String[] args) throws Exception {
