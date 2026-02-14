@@ -39,8 +39,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y unzip curl
-          # Download latest Allure CLI
-          curl -sL https://github.com/allure-framework/allure2/releases/latest/download/allure-2.27.1.zip -o allure.zip
+          # Download a specific version of Allure CLI (replace 2.27.1 with latest if needed)
+          curl -Lo allure.zip https://github.com/allure-framework/allure2/releases/download/2.27.1/allure-2.27.1.zip
           unzip allure.zip -d allure
           sudo mv allure/bin/allure /usr/local/bin/
           allure --version
