@@ -6,6 +6,12 @@ on:
       - main
   workflow_dispatch:
 
+# Required permissions for GitHub Pages deployment
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
 jobs:
   run-tests-and-publish-allure:
     runs-on: ubuntu-latest
@@ -16,14 +22,13 @@ jobs:
       HEADLESS: true
 
     steps:
-
       # 1️⃣ Checkout the repository
       - name: Checkout Repository Code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # 2️⃣ Display Java version (debugging)
+      # 2️⃣ Display Java version
       - name: Display Java Version
         run: java -version
 
@@ -37,11 +42,10 @@ jobs:
       # 4️⃣ Install Allure CLI
       - name: Install Allure CLI
         run: |
-          wget https://github.com/allure-framework/allure2/releases/download/2.27.0/allure-2.27.0.tgz
+          wget https://github.com
           tar -zxvf allure-2.27.0.tgz
           sudo mv allure-2.27.0 /opt/allure
           sudo ln -s /opt/allure/bin/allure /usr/bin/allure
-          allure --version
 
       # 5️⃣ Prepare history folder
       - name: Prepare History Folder
@@ -50,7 +54,7 @@ jobs:
       # 6️⃣ Fetch existing history from gh-pages
       - name: Fetch Existing History from gh-pages
         run: |
-          git fetch origin gh-pages
+          git fetch origin gh-pages || true
           git checkout gh-pages -- history || echo "No history found"
 
       # 7️⃣ Merge existing history into current results
@@ -64,116 +68,93 @@ jobs:
       # 9️⃣ Install Node & Playwright
       - name: Install Node and Playwright Browsers
         run: |
-          curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-          sudo apt-get install -y nodejs
           npm install -g playwright
-          npx playwright install
+          npx playwright install --with-deps
 
       # 🔟 Run Maven tests
       - name: Run Test Suite
         run: |
           xvfb-run --auto-servernum -- mvn test \
-            -Denv=$ENV \
-            -Dbrowser=$BROWSER \
-            -Dheadless=$HEADLESS \
-            -Ddataproviderthreadcount=3 \
-            -Dretry=1 \
+            -Denv=$ENV -Dbrowser=$BROWSER -Dheadless=$HEADLESS \
             -Dcucumber.filter.tags="@Login" || true
 
-      # 11️⃣ Backup history folder with timestamp
+      # 1️⃣1️⃣ Backup history folder
       - name: Backup Allure History
         run: |
           TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
           mkdir -p allure-history-backup
           cp -r target/allure-results/history allure-history-backup/history-$TIMESTAMP
-          echo "Backup created at allure-history-backup/history-$TIMESTAMP"
 
-      # 12️⃣ Clean previous Allure reports
+      # 1️⃣2️⃣ Clean previous Allure reports
       - name: Clean Old Allure Reports
         run: rm -rf gh-pages/report-*
 
-      # 13️⃣ Set timestamp for report (make it available to all steps)
+      # 1️⃣3️⃣ Set timestamp for report
       - name: Set Timestamp for Report
-        id: timestamp
         run: echo "REPORT_TS=$(date +'%Y-%m-%d_%H-%M-%S')" >> $GITHUB_ENV
 
-      # 14️⃣ Create temporary report folder for current run
+      # 1️⃣4️⃣ Create temporary report folder
       - name: Create Temporary Report Folder
         run: mkdir -p temp-report-${{ env.REPORT_TS }}
 
-      # 15️⃣ Generate Allure HTML into temp folder
+      # 1️⃣5️⃣ Generate Allure HTML
       - name: Generate Allure HTML
         run: allure generate target/allure-results -o temp-report-${{ env.REPORT_TS }} --clean
 
-      # 16️⃣ List generated report contents
+      # 1️⃣6️⃣ List generated report contents
       - name: List Generated Report
         run: ls -l temp-report-${{ env.REPORT_TS }}
 
-      # 17️⃣ Configure Git for push
+      # 1️⃣7️⃣ Configure Git for push
       - name: Configure Git
         run: |
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
 
-      # 18️⃣ Commit Allure HTML to gh-pages
+      # 1️⃣8️⃣ Commit Allure HTML to gh-pages
       - name: Commit Allure Report
         run: |
           git fetch origin
-          # Switch to gh-pages branch, create if missing
           if git ls-remote --exit-code origin gh-pages; then
             git checkout gh-pages
           else
             git checkout --orphan gh-pages
             git rm -rf .
           fi
-
-          # Copy temp report into gh-pages folder
           mkdir -p report-${{ env.REPORT_TS }}
           cp -r temp-report-${{ env.REPORT_TS }}/* report-${{ env.REPORT_TS }}/
+          git add .
+          git commit -m "Update Allure report ${{ env.REPORT_TS }}" || echo "No changes"
 
-          git add report-${{ env.REPORT_TS }}
-          git commit -m "Update Allure report ${{ env.REPORT_TS }}" || echo "No changes to commit"
-
-      # 19️⃣ Push Allure HTML to gh-pages
+      # 1️⃣9️⃣ Push Allure HTML to gh-pages
       - name: Push Report to GitHub Pages
-        run: git push -u origin gh-pages
+        run: git push origin gh-pages
 
-#      # 20️⃣ Upload Allure results as artifact
-#      - name: Upload Allure Results Artifact
-#        uses: actions/upload-artifact@v4
-#        with:
-#          name: allure-results
-#          path: target/allure-results
-
-      # 21️⃣ Upload Test Output Artifact
-      - name: Upload Latest Failed Locator JSON
+      # 2️⃣0️⃣ Prepare Failed Locators for Pages Hosting
+      - name: Prepare Failed Locators for Pages
         run: |
-          echo "Waiting for failedLocators JSON to exist..."
-          for i in {1..10}; do
-            FILE=$(ls test-output/failedLocators_*.json 2>/dev/null | sort | tail -n 1)
-            if [ -n "$FILE" ]; then
-              echo "Found file: $FILE"
-              break
-            fi
-            echo "File not found yet, waiting 2s..."
-            sleep 2
-          done
-          
+          mkdir -p public-artifacts
+          FILE=$(ls test-output/failedLocators_*.json 2>/dev/null | sort | tail -n 1)
           if [ -n "$FILE" ]; then
-            echo "Uploading $FILE"
-            echo "::set-output name=path::$FILE"
+            cp "$FILE" public-artifacts/latest-failed-locator.json
           else
-            echo "No failedLocators JSON found. Skipping upload."
+            echo "No JSON found" > public-artifacts/no-file.txt
           fi
-        shell: bash
 
-      - uses: actions/upload-artifact@v4
+      # 2️⃣1️⃣ Upload Pages Artifact (This enables the link in Settings)
+      - name: Upload Pages Artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-           name: Failed_locators
-           path: ${{ github.workspace }}/test-output/failedLocators_*.json
+          path: 'public-artifacts/'
 
-
-      # 22️⃣ Display GitHub Pages report URL
-      - name: Display Report URL
-        run: |
-          echo "Report URL: https://atulbmhetre.github.io/playwright-cucumber-framework/report-${{ env.REPORT_TS }}"
+  deploy-to-pages:
+    # 2️⃣2️⃣ Deploy to GitHub Pages (The final step to show the link)
+    needs: run-tests-and-publish-allure
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
