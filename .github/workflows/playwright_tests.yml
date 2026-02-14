@@ -146,14 +146,26 @@ jobs:
 #          path: target/allure-results
 
       # 21️⃣ Upload Test Output Artifact
-      - name: Upload Test Output Artifact
+      - name: Upload Latest Failed Locator JSON
         run: |
-          echo "Listing contents of test-output before upload"
-          ls -la test-output
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Failed_locators
-          path: ./test-output/failedLocators_*.json
+          echo "Waiting for failedLocators JSON to exist..."
+          for i in {1..10}; do
+            FILE=$(ls test-output/failedLocators_*.json 2>/dev/null | sort | tail -n 1)
+            if [ -n "$FILE" ]; then
+              echo "Found file: $FILE"
+              break
+            fi
+            echo "File not found yet, waiting 2s..."
+            sleep 2
+          done
+          
+          if [ -n "$FILE" ]; then
+            echo "Uploading $FILE"
+            gh-actions-upload-artifact "$FILE" "Failed_locators"
+          else
+            echo "No failedLocators JSON found. Skipping upload."
+          fi
+        shell: bash
 
       # 22️⃣ Display GitHub Pages report URL
       - name: Display Report URL
