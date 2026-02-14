@@ -82,18 +82,24 @@ jobs:
             -o target/site/allure \
             --clean || true
 
-      # 9️⃣ Run Defect Age Report (Java)
-      - name: Defect Age Report
-        run: mvn exec:java -Dexec.mainClass="com.qa.opencart.utils.AllureDefectAge"
+      # 9️⃣ Compile test classes (include AllureDefectAge)
+      - name: Compile Test Classes
+        run: mvn test-compile
 
-      # 🔟 Upload Defect Age Report (v4)
+      # 🔟 Run Defect Age Report (from src/test/java)
+      - name: Defect Age Report
+        run: mvn exec:java \
+          -Dexec.mainClass="com.samtech.qa.testutilities.AllureDefectAge" \
+          -Dexec.classpathScope=test
+
+      # 1️⃣1️⃣ Upload Defect Age Report as artifact (v4)
       - name: Upload Defect Age Report
         uses: actions/upload-artifact@v4
         with:
           name: defect-age-report
           path: target/defect-age-report.txt
 
-      # 1️⃣1️⃣ Deploy Allure Report to gh-pages
+      # 1️⃣2️⃣ Deploy Allure Report to gh-pages
       - name: Deploy Allure Report
         uses: peaceiris/actions-gh-pages@v3
         with:
