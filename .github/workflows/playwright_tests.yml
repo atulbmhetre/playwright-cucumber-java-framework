@@ -23,7 +23,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      # 2️⃣ Display Java version (debugging)
+      # 2️⃣ Display Java version
       - name: Display Java Version
         run: java -version
 
@@ -80,7 +80,13 @@ jobs:
             -Dretry=1 \
             -Dcucumber.filter.tags="@Login" || true
 
-      # 11️⃣ Backup history folder with timestamp
+      # 1️⃣1️⃣ Generate Defect Age Report
+      - name: Generate Defect Age Report
+        run: |
+          mvn compile
+          java -cp target/classes com.samtech.qa.testutilities.AllureDefectAge
+
+      # 1️⃣2️⃣ Backup history folder with timestamp
       - name: Backup Allure History
         run: |
           TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
@@ -88,38 +94,37 @@ jobs:
           cp -r target/allure-results/history allure-history-backup/history-$TIMESTAMP
           echo "Backup created at allure-history-backup/history-$TIMESTAMP"
 
-      # 12️⃣ Clean previous Allure reports
+      # 1️⃣3️⃣ Clean previous Allure reports
       - name: Clean Old Allure Reports
         run: rm -rf gh-pages/report-*
 
-      # 13️⃣ Set timestamp for report (make it available to all steps)
+      # 1️⃣4️⃣ Set timestamp for report
       - name: Set Timestamp for Report
         id: timestamp
         run: echo "REPORT_TS=$(date +'%Y-%m-%d_%H-%M-%S')" >> $GITHUB_ENV
 
-      # 14️⃣ Create temporary report folder for current run
+      # 1️⃣5️⃣ Create temporary report folder
       - name: Create Temporary Report Folder
         run: mkdir -p temp-report-${{ env.REPORT_TS }}
 
-      # 15️⃣ Generate Allure HTML into temp folder
+      # 1️⃣6️⃣ Generate Allure HTML into temp folder
       - name: Generate Allure HTML
         run: allure generate target/allure-results -o temp-report-${{ env.REPORT_TS }} --clean
 
-      # 16️⃣ List generated report contents
+      # 1️⃣7️⃣ List generated report contents
       - name: List Generated Report
         run: ls -l temp-report-${{ env.REPORT_TS }}
 
-      # 17️⃣ Configure Git for push
+      # 1️⃣8️⃣ Configure Git for push
       - name: Configure Git
         run: |
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
 
-      # 18️⃣ Commit Allure HTML to gh-pages
+      # 1️⃣9️⃣ Commit Allure HTML to gh-pages
       - name: Commit Allure Report
         run: |
           git fetch origin
-          # Switch to gh-pages branch, create if missing
           if git ls-remote --exit-code origin gh-pages; then
             git checkout gh-pages
           else
@@ -127,53 +132,48 @@ jobs:
             git rm -rf .
           fi
 
-          # Copy temp report into gh-pages folder
           mkdir -p report-${{ env.REPORT_TS }}
           cp -r temp-report-${{ env.REPORT_TS }}/* report-${{ env.REPORT_TS }}/
 
           git add report-${{ env.REPORT_TS }}
           git commit -m "Update Allure report ${{ env.REPORT_TS }}" || echo "No changes to commit"
 
-      # 19️⃣ Push Allure HTML to gh-pages
+      # 2️⃣0️⃣ Push Allure HTML to gh-pages
       - name: Push Report to GitHub Pages
         run: git push -u origin gh-pages
 
-      # 20️⃣ Upload Allure results as artifact
+      # 2️⃣1️⃣ Upload Allure results as artifact
       - name: Upload Allure Results Artifact
         uses: actions/upload-artifact@v4
         with:
           name: allure-results
           path: target/allure-results
 
-      # 21️⃣ Upload Test Output Artifact
-      - name: Upload Latest Failed Locator JSON
+      # 2️⃣2️⃣ Upload Latest Failed Locator JSON
+      - name: Detect Latest Failed Locator JSON
         run: |
-          echo "Waiting for failedLocators JSON to exist..."
-          for i in {1..10}; do
-            FILE=$(ls test-output/failedLocators_*.json 2>/dev/null | sort | tail -n 1)
-            if [ -n "$FILE" ]; then
-              echo "Found file: $FILE"
-              break
-            fi
-            echo "File not found yet, waiting 2s..."
-            sleep 2
-          done
-          
+          FILE=$(ls test-output/failedLocators_*.json 2>/dev/null | sort | tail -n 1)
           if [ -n "$FILE" ]; then
-            echo "Uploading $FILE"
-            echo "path=$FILE" >> "$GITHUB_OUTPUT"
+            echo "FILE_PATH=$FILE" >> $GITHUB_ENV
           else
-            echo "No failedLocators JSON found. Skipping upload."
+            echo "No failedLocators JSON found."
           fi
-        shell: bash
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload Failed Locators Artifact
+        if: env.FILE_PATH != ''
+        uses: actions/upload-artifact@v4
         with:
           name: Failed_locators
-          path: ${{ github.workspace }}/test-output/failedLocators_*.json
+          path: ${{ env.FILE_PATH }}
 
+      # 2️⃣3️⃣ Upload Defect Age Report Artifact
+      - name: Upload Defect Age Report Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: defect-age-report
+          path: target/defect-age-report.csv
 
-      # 22️⃣ Display GitHub Pages report URL
+      # 2️⃣4️⃣ Display GitHub Pages report URL
       - name: Display Report URL
         run: |
           echo "Report URL: https://atulbmhetre.github.io/playwright-cucumber-framework/report-${{ env.REPORT_TS }}"
