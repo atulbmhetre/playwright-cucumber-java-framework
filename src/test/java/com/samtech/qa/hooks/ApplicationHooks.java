@@ -15,6 +15,7 @@ import io.cucumber.java.*;
 import io.qameta.allure.Allure;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.testng.annotations.AfterMethod;
 import org.testng.annotations.AfterSuite;
 
 import java.io.ByteArrayInputStream;
@@ -77,6 +78,7 @@ public class ApplicationHooks {
     }
 
     @After(order = 3)
+    @AfterMethod(alwaysRun = true)
     public void captureScenarioScreenshot(Scenario scenario) {
         Status status = scenario.getStatus();
         boolean shouldCapture = false;
@@ -96,6 +98,7 @@ public class ApplicationHooks {
     }
 
     @After(order = 2)
+    @AfterMethod(alwaysRun = true)
     public void captureTrace(Scenario scenario) {
         BrowserContext context = testContext.getDriverFactory().getTlBrowserContext().get();
 
@@ -137,12 +140,14 @@ public class ApplicationHooks {
     }
 
     @After(order = 0)
+    @AfterMethod(alwaysRun = true)
     public void quitBrowser(Scenario scenario) {
         logger.info("SCENARIO FINISHED: {} | Status: {}", scenario.getName(), scenario.getStatus());
         testContext.getDriverFactory().closePlaywright();
     }
 
     @AfterSuite
+    @AfterMethod(alwaysRun = true)
     public void tearDownSuite() {
         FailedLocatorCollector.generateJsonReport();
     }
