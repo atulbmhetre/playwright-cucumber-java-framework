@@ -109,6 +109,7 @@ jobs:
 
       # 🔟 Run Maven tests
       - name: Run Test Suite
+        continue-on-error: true
         run: |
           xvfb-run --auto-servernum -- mvn test \
             -Denv=$ENV \
@@ -116,7 +117,6 @@ jobs:
             -Dheadless=$HEADLESS \
             -Ddataproviderthreadcount=$THREADCOUNT \
             -Dcucumber.filter.tags="$TAGS"|| echo "Tests failed but continuing for report generation"
-          continue-on-error: true
 
       # 1️⃣1️⃣ Backup history folder with timestamp
       - name: Backup Allure History
@@ -168,6 +168,7 @@ jobs:
 
       # 1️⃣9️⃣ Commit Allure HTML to gh-pages (Publish to ROOT safely)
       - name: Commit Allure Report
+        if: always()
         run: |
           git fetch origin
           
@@ -177,7 +178,7 @@ jobs:
             git checkout --orphan gh-pages
           fi
           
-          # Clean tracked files safely
+          # Remove tracked files
           git rm -rf . || true
           
           # Copy fresh report to root
@@ -185,6 +186,8 @@ jobs:
           
           git add .
           git commit -m "Update Allure report ${{ env.REPORT_TS }}" || echo "No changes to commit"
+          
+          git push origin gh-pages
 
       # 2️⃣0️⃣ Push Allure HTML to gh-pages
       - name: Push Report to GitHub Pages
@@ -368,6 +371,7 @@ jobs:
 
       # 1️⃣9️⃣ Commit Allure HTML to gh-pages (Publish to ROOT safely)
       - name: Commit Allure Report
+        if: always()
         run: |
           git fetch origin
           
@@ -377,7 +381,7 @@ jobs:
             git checkout --orphan gh-pages
           fi
           
-          # Clean tracked files safely
+          # Remove tracked files
           git rm -rf . || true
           
           # Copy fresh report to root
@@ -385,6 +389,8 @@ jobs:
           
           git add .
           git commit -m "Update Allure report ${{ env.REPORT_TS }}" || echo "No changes to commit"
+          
+          git push origin gh-pages
 
       # 2️⃣0️⃣ Push Allure HTML to gh-pages
       - name: Push Report to GitHub Pages
