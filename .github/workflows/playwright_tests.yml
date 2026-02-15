@@ -166,11 +166,24 @@ jobs:
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
 
+      - name: Debug Report Folders
+        if: always()
+        run: |
+          echo "=== ROOT ==="
+          ls -l
+          echo "=== TARGET ==="
+          ls -l target || true
+          echo "=== TEMP REPORTS ==="
+          ls -l temp-report-* || true
+
       # 1️⃣9️⃣ Commit Allure HTML to gh-pages (Publish to ROOT safely)
       - name: Commit Allure Report
         if: always()
         run: |
           git fetch origin
+          
+          # Clean EVERYTHING except .git
+          git clean -fdx
           
           if git ls-remote --exit-code origin gh-pages; then
             git checkout gh-pages
@@ -178,16 +191,14 @@ jobs:
             git checkout --orphan gh-pages
           fi
           
-          # Remove tracked files
           git rm -rf . || true
           
-          # Copy fresh report to root
           cp -r temp-report-${{ env.REPORT_TS }}/* .
           
           git add .
           git commit -m "Update Allure report ${{ env.REPORT_TS }}" || echo "No changes to commit"
           
-          git push origin gh-pages
+          git push origin gh-pages --force
 
       # 2️⃣0️⃣ Push Allure HTML to gh-pages
       - name: Push Report to GitHub Pages
@@ -375,22 +386,23 @@ jobs:
         run: |
           git fetch origin
           
+          # Clean EVERYTHING except .git
+          git clean -fdx
+          
           if git ls-remote --exit-code origin gh-pages; then
             git checkout gh-pages
           else
             git checkout --orphan gh-pages
           fi
           
-          # Remove tracked files
           git rm -rf . || true
           
-          # Copy fresh report to root
           cp -r temp-report-${{ env.REPORT_TS }}/* .
           
           git add .
           git commit -m "Update Allure report ${{ env.REPORT_TS }}" || echo "No changes to commit"
           
-          git push origin gh-pages
+          git push origin gh-pages --force
 
       # 2️⃣0️⃣ Push Allure HTML to gh-pages
       - name: Push Report to GitHub Pages
