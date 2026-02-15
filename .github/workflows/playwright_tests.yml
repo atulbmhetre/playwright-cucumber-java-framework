@@ -254,7 +254,7 @@ jobs:
 
       # 2️⃣5️⃣ Fail job if tests failed
       - name: Fail job if tests failed
-        if: steps.test_run.outcome == 'failure'
+        if: steps.run_tests.outcome == 'failure'
         run: exit 1
 
   regression-tests:
