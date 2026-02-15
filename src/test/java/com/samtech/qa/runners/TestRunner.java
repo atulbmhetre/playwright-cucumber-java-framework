@@ -35,6 +35,10 @@ public class TestRunner extends AbstractTestNGCucumberTests {
         String threads = ConfigLoader.getInstance().getOptionalProp("dataproviderthreadcount");
         System.setProperty("dataproviderthreadcount", threads);
 
+        System.out.println("ENV FROM SYSTEM: " + System.getProperty("env"));
+        System.out.println("BROWSER FROM SYSTEM: " + System.getProperty("browser"));
+        System.out.println("TAGS FROM SYSTEM: " + System.getProperty("cucumber.filter.tags"));
+
         logger.info("Framework initialized with Threads: {}",
                 System.getProperty("dataproviderthreadcount"));
 
