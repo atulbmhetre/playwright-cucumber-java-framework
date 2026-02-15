@@ -5,16 +5,42 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      suite:
+        description: "Select test suite"
+        required: true
+        default: "smoke"
+        type: choice
+        options:
+          - smoke
+          - regression
+      env:
+        description: "Environment to run tests against (mandatory)"
+        required: true
+      browser:
+        description: "Browser to use (mandatory)"
+        required: true
+      threadcount:
+        description: "Dataprovider thread count (optional)"
+        required: false
+        default: "3"
+      tags:
+        description: "Cucumber tags to execute (optional)"
+        required: false
+        default: "@smoke"
 
 jobs:
-  run-tests-and-publish-allure:
+
+  smoke-tests:
+    if: ${{ github.event.inputs.suite == 'smoke' }}
     runs-on: ubuntu-latest
     env:
       JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.10-7/x64
-      ENV: qa
-      BROWSER: chromium
+      ENV: ${{ github.event.inputs.env }}
+      BROWSER: ${{ github.event.inputs.browser }}
       HEADLESS: true
-
+      THREADCOUNT: ${{ github.event.inputs.threadcount }}
+      TAGS: ${{ github.event.inputs.tags }}
     steps:
 
       # 1️⃣ Checkout the repository
@@ -59,7 +85,7 @@ jobs:
 
       # 8️⃣ Display environment variables
       - name: Display Environment Variables
-        run: env | grep -E 'ENV|BROWSER|HEADLESS'
+        run: env | grep -E 'ENV|BROWSER|HEADLESS|THREADCOUNT|TAGS'
 
       # 9️⃣ Install Node & Playwright
       - name: Install Node and Playwright Browsers
@@ -76,9 +102,190 @@ jobs:
             -Denv=$ENV \
             -Dbrowser=$BROWSER \
             -Dheadless=$HEADLESS \
-            -Ddataproviderthreadcount=3 \
-            -Dretry=1 \
-            -Dcucumber.filter.tags="@Login" || true
+            -Ddataproviderthreadcount=$THREADCOUNT \
+            -Dcucumber.filter.tags="$TAGS"
+
+      # 1️⃣1️⃣ Backup history folder with timestamp
+      - name: Backup Allure History
+        run: |
+          TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
+          mkdir -p allure-history-backup
+          cp -r target/allure-results/history allure-history-backup/history-$TIMESTAMP
+          echo "Backup created at allure-history-backup/history-$TIMESTAMP"
+
+      # 1️⃣2️⃣ Clean previous Allure reports
+      - name: Clean Old Allure Reports
+        run: rm -rf gh-pages/report-*
+
+      # 1️⃣3️⃣ Set timestamp for report
+      - name: Set Timestamp for Report
+        id: timestamp
+        run: echo "REPORT_TS=$(date +'%Y-%m-%d_%H-%M-%S')" >> $GITHUB_ENV
+
+      # 1️⃣4️⃣ Create temporary report folder
+      - name: Create Temporary Report Folder
+        run: mkdir -p temp-report-${{ env.REPORT_TS }}
+
+      # 1️⃣5️⃣ Generate Allure HTML into temp folder
+      - name: Generate Allure HTML
+        run: |
+          echo "====== ENTERED STEP 15 - GENERATE ALLURE HTML ======"
+          allure generate target/allure-results -o temp-report-${{ env.REPORT_TS }} --clean
+          echo "====== ALLURE HTML GENERATED ======"
+
+      # 1️⃣6️⃣ Generate Defect Age Report
+      - name: Generate Defect Age Report
+        run: |
+          echo "====== GENERATING DEFECT AGE REPORT ======"
+          mvn test-compile exec:java \
+            -Dexec.mainClass=com.samtech.qa.testutilities.AllureDefectAge \
+            -Dexec.classpathScope=test \
+            -Dhistory.dir=temp-report-${{ env.REPORT_TS }}/history
+          echo "====== DEFECT AGE REPORT GENERATED ======"
+
+      # 1️⃣7️⃣ List generated report contents
+      - name: List Generated Report
+        run: ls -l temp-report-${{ env.REPORT_TS }}
+
+      # 1️⃣8️⃣ Configure Git for push
+      - name: Configure Git
+        run: |
+          git config --global user.email "actions@github.com"
+          git config --global user.name "GitHub Actions"
+
+      # 1️⃣9️⃣ Commit Allure HTML to gh-pages
+      - name: Commit Allure Report
+        run: |
+          git fetch origin
+          if git ls-remote --exit-code origin gh-pages; then
+            git checkout gh-pages
+          else
+            git checkout --orphan gh-pages
+            git rm -rf .
+          fi
+
+          mkdir -p report-${{ env.REPORT_TS }}
+          cp -r temp-report-${{ env.REPORT_TS }}/* report-${{ env.REPORT_TS }}/
+
+          git add report-${{ env.REPORT_TS }}
+          git commit -m "Update Allure report ${{ env.REPORT_TS }}" || echo "No changes to commit"
+
+      # 2️⃣0️⃣ Push Allure HTML to gh-pages
+      - name: Push Report to GitHub Pages
+        run: git push -u origin gh-pages
+
+      # 2️⃣1️⃣ Upload Allure results as artifact
+      - name: Upload Allure Results Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-results
+          path: target/allure-results
+
+      # 2️⃣2️⃣ Upload Latest Failed Locator JSON
+      - name: Detect Latest Failed Locator JSON
+        run: |
+          FILE=$(ls test-output/failedLocators_*.json 2>/dev/null | sort | tail -n 1)
+          if [ -n "$FILE" ]; then
+            echo "FILE_PATH=$FILE" >> $GITHUB_ENV
+          else
+            echo "No failedLocators JSON found."
+          fi
+
+      - name: Upload Failed Locators Artifact
+        if: env.FILE_PATH != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: Failed_locators
+          path: ${{ env.FILE_PATH }}
+
+      # 2️⃣3️⃣ Upload Defect Age Report Artifact
+      - name: Upload Defect Age Report Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: defect-age-report
+          path: target/defect-age-report.csv
+
+      # 2️⃣4️⃣ Display GitHub Pages report URL
+      - name: Display Report URL
+        run: |
+          echo "Report URL: https://atulbmhetre.github.io/playwright-cucumber-framework/report-${{ env.REPORT_TS }}"
+
+  regression-tests:
+    if: ${{ github.event.inputs.suite == 'regression' }}
+    runs-on: ubuntu-latest
+    env:
+      JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.10-7/x64
+      ENV: ${{ github.event.inputs.env }}
+      BROWSER: ${{ github.event.inputs.browser }}
+      HEADLESS: true
+      THREADCOUNT: ${{ github.event.inputs.threadcount }}
+      TAGS: ${{ github.event.inputs.tags }}
+
+    steps:
+      # Only difference: 🔟 Run Maven tests uses continue-on-error
+
+      # 1️⃣ Checkout the repository
+      - name: Checkout Repository Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # 2️⃣ Display Java version
+      - name: Display Java Version
+        run: java -version
+
+      # 3️⃣ Setup Java 21
+      - name: Setup Java 21
+        uses: actions/setup-java@v3
+        with:
+          distribution: temurin
+          java-version: 21
+
+      # 4️⃣ Install Allure CLI
+      - name: Install Allure CLI
+        run: |
+          wget https://github.com/allure-framework/allure2/releases/download/2.27.0/allure-2.27.0.tgz
+          tar -zxvf allure-2.27.0.tgz
+          sudo mv allure-2.27.0 /opt/allure
+          sudo ln -s /opt/allure/bin/allure /usr/bin/allure
+          allure --version
+
+      # 5️⃣ Prepare history folder
+      - name: Prepare History Folder
+        run: mkdir -p target/allure-results/history
+
+      # 6️⃣ Fetch existing history from gh-pages
+      - name: Fetch Existing History from gh-pages
+        run: |
+          git fetch origin gh-pages
+          git checkout gh-pages -- history || echo "No history found"
+
+      # 7️⃣ Merge existing history into current results
+      - name: Merge Existing History into Allure Results
+        run: cp -r history/* target/allure-results/history/ || echo "No previous history to copy"
+
+      # 8️⃣ Display environment variables
+      - name: Display Environment Variables
+        run: env | grep -E 'ENV|BROWSER|HEADLESS|THREADCOUNT|TAGS'
+
+      # 9️⃣ Install Node & Playwright
+      - name: Install Node and Playwright Browsers
+        run: |
+          curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+          sudo apt-get install -y nodejs
+          npm install -g playwright
+          npx playwright install
+
+      # 🔟 Run Maven tests
+      - name: Run Test Suite
+        continue-on-error: true
+        run: |
+          xvfb-run --auto-servernum -- mvn test \
+            -Denv=$ENV \
+            -Dbrowser=$BROWSER \
+            -Dheadless=$HEADLESS \
+            -Ddataproviderthreadcount=$THREADCOUNT \
+            -Dcucumber.filter.tags="$TAGS"
 
       # 1️⃣1️⃣ Backup history folder with timestamp
       - name: Backup Allure History
