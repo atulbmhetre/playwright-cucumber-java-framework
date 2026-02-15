@@ -90,14 +90,14 @@ jobs:
         run: |
           if git ls-remote --exit-code origin gh-pages; then
             git fetch origin gh-pages
-            git checkout origin/gh-pages -- history || echo "No history folder found"
+            git checkout origin/gh-pages -- history-smoke || echo "No smoke history folder found"
           else
             echo "gh-pages branch does not exist yet. Skipping history restore."
           fi
 
       # 7️⃣ Merge existing history into current results
       - name: Merge Existing History into Allure Results
-        run: cp -r history/* target/allure-results/history/ || echo "No previous history to copy"
+        run: cp -r history-smoke/* target/allure-results/history/ || echo "No previous smoke history to copy"
 
       # 8️⃣ Display environment variables
       - name: Display Environment Variables
@@ -123,7 +123,20 @@ jobs:
             -Ddataproviderthreadcount=$THREADCOUNT \
             -Dcucumber.filter.tags="$TAGS"
 
-      # 1️⃣1️⃣ Backup history folder with timestamp
+      # 1️⃣1️⃣ Write Allure environment details
+      - name: Write Allure Environment Info
+        run: |
+          cat > target/allure-results/environment.properties <<EOF
+          ENV=$ENV
+          BROWSER=$BROWSER
+          HEADLESS=$HEADLESS
+          THREADCOUNT=$THREADCOUNT
+          TAGS=$TAGS
+          JOB=smoke-tests
+          RUN_ID=${{ github.run_id }}
+          EOF
+
+      # 1️⃣2️⃣ Backup history folder with timestamp
       - name: Backup Allure History
         run: |
           TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
@@ -131,20 +144,14 @@ jobs:
           cp -r target/allure-results/history allure-history-backup/history-$TIMESTAMP
           echo "Backup created at allure-history-backup/history-$TIMESTAMP"
 
-      # 1️⃣2️⃣ Clean previous Allure reports
+      # 1️⃣3️⃣ Clean previous Allure reports
       - name: Clean Old Allure Reports
-        run: rm -rf gh-pages/report-*
+        run: echo "Skipping cleanup to preserve previous report executions"
 
-      # 1️⃣3️⃣ Set timestamp for report
+      # 1️⃣4️⃣ Set timestamp for report
       - name: Set Timestamp for Report
         id: timestamp
-        run: echo "REPORT_TS=$(date +'%Y-%m-%d_%H-%M-%S')" >> $GITHUB_ENV
-
-      # 1️⃣4️⃣ Set report metadata
-      - name: Set Report Metadata
-        run: |
-          echo "SUITE_NAME=smoke" >> $GITHUB_ENV
-          echo "REPORT_ID=${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}" >> $GITHUB_ENV
+        run: echo "REPORT_TS=smoke-$(date +'%Y-%m-%d_%H-%M-%S')" >> $GITHUB_ENV
 
       # 1️⃣5️⃣ Create temporary report folder
       - name: Create Temporary Report Folder
@@ -166,7 +173,7 @@ jobs:
             -Dexec.classpathScope=test \
             -Dhistory.dir=temp-report-${{ env.REPORT_TS }}/history
           echo "====== DEFECT AGE REPORT GENERATED ======"
-
+          
           # Preserve CSV outside workspace before git clean/checkout
           mkdir -p /tmp/defect-age
           cp target/defect-age-report.csv /tmp/defect-age/defect-age-report-${{ env.REPORT_TS }}.csv
@@ -197,38 +204,34 @@ jobs:
         if: always()
         run: |
           echo "Preparing safe publish..."
-
+          
           # Copy report outside repo first
           mkdir -p /tmp/allure-report
           cp -r temp-report-${{ env.REPORT_TS }}/* /tmp/allure-report/
-
+          
           # Clean working tree completely
           git reset --hard
           git clean -fd
-
+          
           git fetch origin
-
+          
           if git ls-remote --exit-code origin gh-pages; then
             git checkout gh-pages
           else
             git checkout --orphan gh-pages
           fi
-
-          # Immutable archive per run + stable latest per suite
-          mkdir -p reports/${{ env.SUITE_NAME }}/${{ env.REPORT_ID }}
-          cp -r /tmp/allure-report/* reports/${{ env.SUITE_NAME }}/${{ env.REPORT_ID }}/
-
-          rm -rf reports/${{ env.SUITE_NAME }}/latest
-          mkdir -p reports/${{ env.SUITE_NAME }}/latest
-          cp -r /tmp/allure-report/* reports/${{ env.SUITE_NAME }}/latest/
-
-          # Update top-level history for next run restore logic
-          rm -rf history
-          cp -r /tmp/allure-report/history history || true
-
+          
+          # Copy fresh report to timestamped folder
+          mkdir -p report-${{ env.REPORT_TS }}
+          cp -r /tmp/allure-report/* report-${{ env.REPORT_TS }}/
+          
+          # Save smoke history separately
+          rm -rf history-smoke
+          cp -r /tmp/allure-report/history history-smoke || true
+          
           git add .
-          git commit -m "Update ${{ env.SUITE_NAME }} Allure report ${{ env.REPORT_ID }}" || echo "No changes to commit"
-
+          git commit -m "Update Allure report ${{ env.REPORT_TS }}" || echo "No changes to commit"
+          
           git push origin gh-pages --force
 
       # 2️⃣2️⃣ Upload Allure results as artifact
@@ -267,8 +270,7 @@ jobs:
       # 2️⃣5️⃣ Display GitHub Pages report URL
       - name: Display Report URL
         run: |
-          echo "Latest smoke report: https://atulbmhetre.github.io/playwright-cucumber-framework/reports/smoke/latest/"
-          echo "Archived smoke report: https://atulbmhetre.github.io/playwright-cucumber-framework/reports/smoke/${{ env.REPORT_ID }}/"
+          echo "Report URL: https://atulbmhetre.github.io/playwright-cucumber-framework/report-${{ env.REPORT_TS }}"
 
       # 2️⃣6️⃣ Fail job if tests failed
       - name: Fail job if tests failed
@@ -334,14 +336,14 @@ jobs:
         run: |
           if git ls-remote --exit-code origin gh-pages; then
             git fetch origin gh-pages
-            git checkout origin/gh-pages -- history || echo "No history folder found"
+            git checkout origin/gh-pages -- history-regression || echo "No regression history folder found"
           else
             echo "gh-pages branch does not exist yet. Skipping history restore."
           fi
 
       # 7️⃣ Merge existing history into current results
       - name: Merge Existing History into Allure Results
-        run: cp -r history/* target/allure-results/history/ || echo "No previous history to copy"
+        run: cp -r history-regression/* target/allure-results/history/ || echo "No previous regression history to copy"
 
       # 8️⃣ Display environment variables
       - name: Display Environment Variables
@@ -367,7 +369,20 @@ jobs:
             -Ddataproviderthreadcount=$THREADCOUNT \
             -Dcucumber.filter.tags="$TAGS"
 
-      # 1️⃣1️⃣ Backup history folder with timestamp
+      # 1️⃣1️⃣ Write Allure environment details
+      - name: Write Allure Environment Info
+        run: |
+          cat > target/allure-results/environment.properties <<EOF
+          ENV=$ENV
+          BROWSER=$BROWSER
+          HEADLESS=$HEADLESS
+          THREADCOUNT=$THREADCOUNT
+          TAGS=$TAGS
+          JOB=regression-tests
+          RUN_ID=${{ github.run_id }}
+          EOF
+
+      # 1️⃣2️⃣ Backup history folder with timestamp
       - name: Backup Allure History
         run: |
           TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
@@ -375,20 +390,14 @@ jobs:
           cp -r target/allure-results/history allure-history-backup/history-$TIMESTAMP
           echo "Backup created at allure-history-backup/history-$TIMESTAMP"
 
-      # 1️⃣2️⃣ Clean previous Allure reports
+      # 1️⃣3️⃣ Clean previous Allure reports
       - name: Clean Old Allure Reports
-        run: rm -rf gh-pages/report-*
+        run: echo "Skipping cleanup to preserve previous report executions"
 
-      # 1️⃣3️⃣ Set timestamp for report
+      # 1️⃣4️⃣ Set timestamp for report
       - name: Set Timestamp for Report
         id: timestamp
-        run: echo "REPORT_TS=$(date +'%Y-%m-%d_%H-%M-%S')" >> $GITHUB_ENV
-
-      # 1️⃣4️⃣ Set report metadata
-      - name: Set Report Metadata
-        run: |
-          echo "SUITE_NAME=regression" >> $GITHUB_ENV
-          echo "REPORT_ID=${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}" >> $GITHUB_ENV
+        run: echo "REPORT_TS=regression-$(date +'%Y-%m-%d_%H-%M-%S')" >> $GITHUB_ENV
 
       # 1️⃣5️⃣ Create temporary report folder
       - name: Create Temporary Report Folder
@@ -410,7 +419,7 @@ jobs:
             -Dexec.classpathScope=test \
             -Dhistory.dir=temp-report-${{ env.REPORT_TS }}/history
           echo "====== DEFECT AGE REPORT GENERATED ======"
-
+          
           # Preserve CSV outside workspace before git clean/checkout
           mkdir -p /tmp/defect-age
           cp target/defect-age-report.csv /tmp/defect-age/defect-age-report-${{ env.REPORT_TS }}.csv
@@ -441,38 +450,34 @@ jobs:
         if: always()
         run: |
           echo "Preparing safe publish..."
-
+          
           # Copy report outside repo first
           mkdir -p /tmp/allure-report
           cp -r temp-report-${{ env.REPORT_TS }}/* /tmp/allure-report/
-
+          
           # Clean working tree completely
           git reset --hard
           git clean -fd
-
+          
           git fetch origin
-
+          
           if git ls-remote --exit-code origin gh-pages; then
             git checkout gh-pages
           else
             git checkout --orphan gh-pages
           fi
-
-          # Immutable archive per run + stable latest per suite
-          mkdir -p reports/${{ env.SUITE_NAME }}/${{ env.REPORT_ID }}
-          cp -r /tmp/allure-report/* reports/${{ env.SUITE_NAME }}/${{ env.REPORT_ID }}/
-
-          rm -rf reports/${{ env.SUITE_NAME }}/latest
-          mkdir -p reports/${{ env.SUITE_NAME }}/latest
-          cp -r /tmp/allure-report/* reports/${{ env.SUITE_NAME }}/latest/
-
-          # Update top-level history for next run restore logic
-          rm -rf history
-          cp -r /tmp/allure-report/history history || true
-
+          
+          # Copy fresh report to timestamped folder
+          mkdir -p report-${{ env.REPORT_TS }}
+          cp -r /tmp/allure-report/* report-${{ env.REPORT_TS }}/
+          
+          # Save regression history separately
+          rm -rf history-regression
+          cp -r /tmp/allure-report/history history-regression || true
+          
           git add .
-          git commit -m "Update ${{ env.SUITE_NAME }} Allure report ${{ env.REPORT_ID }}" || echo "No changes to commit"
-
+          git commit -m "Update Allure report ${{ env.REPORT_TS }}" || echo "No changes to commit"
+          
           git push origin gh-pages --force
 
       # 2️⃣2️⃣ Upload Allure results as artifact
@@ -511,8 +516,7 @@ jobs:
       # 2️⃣5️⃣ Display GitHub Pages report URL
       - name: Display Report URL
         run: |
-          echo "Latest regression report: https://atulbmhetre.github.io/playwright-cucumber-framework/reports/regression/latest/"
-          echo "Archived regression report: https://atulbmhetre.github.io/playwright-cucumber-framework/reports/regression/${{ env.REPORT_ID }}/"
+          echo "Report URL: https://atulbmhetre.github.io/playwright-cucumber-framework/report-${{ env.REPORT_TS }}"
 
       # 2️⃣6️⃣ Fail job if tests failed
       - name: Fail job if tests failed
