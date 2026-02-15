@@ -160,6 +160,10 @@ jobs:
             -Dexec.classpathScope=test \
             -Dhistory.dir=temp-report-${{ env.REPORT_TS }}/history
           echo "====== DEFECT AGE REPORT GENERATED ======"
+          
+          # Preserve CSV outside workspace before git clean/checkout
+          mkdir -p /tmp/defect-age
+          cp target/defect-age-report.csv /tmp/defect-age/defect-age-report-${{ env.REPORT_TS }}.csv
 
       # 1️⃣7️⃣ List generated report contents
       - name: List Generated Report
@@ -248,7 +252,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: defect-age-report
-          path: '**/target/defect-age-report.csv'
+          path: /tmp/defect-age/defect-age-report-${{ env.REPORT_TS }}.csv
           if-no-files-found: warn
 
       # 2️⃣4️⃣ Display GitHub Pages report URL
@@ -389,6 +393,10 @@ jobs:
             -Dexec.classpathScope=test \
             -Dhistory.dir=temp-report-${{ env.REPORT_TS }}/history
           echo "====== DEFECT AGE REPORT GENERATED ======"
+          
+          # Preserve CSV outside workspace before git clean/checkout
+          mkdir -p /tmp/defect-age
+          cp target/defect-age-report.csv /tmp/defect-age/defect-age-report-${{ env.REPORT_TS }}.csv
 
       # 1️⃣7️⃣ List generated report contents
       - name: List Generated Report
@@ -477,7 +485,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: defect-age-report
-          path: '**/target/defect-age-report.csv'
+          path: /tmp/defect-age/defect-age-report-${{ env.REPORT_TS }}.csv
           if-no-files-found: warn
 
       # 2️⃣4️⃣ Display GitHub Pages report URL
