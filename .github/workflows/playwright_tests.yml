@@ -314,8 +314,12 @@ jobs:
       # 6️⃣ Fetch existing history from gh-pages
       - name: Fetch Existing History from gh-pages
         run: |
-          git fetch origin gh-pages
-          git checkout gh-pages -- history || echo "No history found"
+          if git ls-remote --exit-code origin gh-pages; then
+            git fetch origin gh-pages
+            git checkout origin/gh-pages -- history || echo "No history folder found"
+          else
+            echo "gh-pages branch does not exist yet. Skipping history restore."
+          fi
 
       # 7️⃣ Merge existing history into current results
       - name: Merge Existing History into Allure Results
