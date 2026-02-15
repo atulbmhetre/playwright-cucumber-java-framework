@@ -68,6 +68,9 @@ public class AllureDefectAge {
         for (Map.Entry<String, CurrentRunEntry> e : currentRunMap.entrySet()) {
             String historyId = e.getKey();
             CurrentRunEntry current = e.getValue();
+            if (!isDefect(current.status)) {
+                continue; // include only failed/broken tests in defect age report
+            }
 
             int defectCount = isDefect(current.status) ? 1 : 0;
             int totalRuns = 1;

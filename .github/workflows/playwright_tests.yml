@@ -190,32 +190,36 @@ jobs:
         if: always()
         run: |
           echo "Preparing safe publish..."
-          
+
           # Copy report outside repo first
           mkdir -p /tmp/allure-report
           cp -r temp-report-${{ env.REPORT_TS }}/* /tmp/allure-report/
-          
+
           # Clean working tree completely
           git reset --hard
           git clean -fd
-          
+
           git fetch origin
-          
+
           if git ls-remote --exit-code origin gh-pages; then
             git checkout gh-pages
           else
             git checkout --orphan gh-pages
           fi
-          
-          # Remove everything tracked
-          git rm -rf . || true
-          
-          # Copy fresh report
-          cp -r /tmp/allure-report/* .
-          
+
+          # Keep previous reports; create this run's report folder
+          mkdir -p report-${{ env.REPORT_TS }}
+
+          # Copy fresh report into timestamped folder
+          cp -r /tmp/allure-report/* report-${{ env.REPORT_TS }}/
+
+          # Also update top-level history for next run restore logic (optional but recommended)
+          rm -rf history
+          cp -r /tmp/allure-report/history history || true
+
           git add .
           git commit -m "Update Allure report ${{ env.REPORT_TS }}" || echo "No changes to commit"
-          
+
           git push origin gh-pages --force
 
       # 2️⃣0️⃣ Push Allure HTML to gh-pages
@@ -423,32 +427,36 @@ jobs:
         if: always()
         run: |
           echo "Preparing safe publish..."
-          
+
           # Copy report outside repo first
           mkdir -p /tmp/allure-report
           cp -r temp-report-${{ env.REPORT_TS }}/* /tmp/allure-report/
-          
+
           # Clean working tree completely
           git reset --hard
           git clean -fd
-          
+
           git fetch origin
-          
+
           if git ls-remote --exit-code origin gh-pages; then
             git checkout gh-pages
           else
             git checkout --orphan gh-pages
           fi
-          
-          # Remove everything tracked
-          git rm -rf . || true
-          
-          # Copy fresh report
-          cp -r /tmp/allure-report/* .
-          
+
+          # Keep previous reports; create this run's report folder
+          mkdir -p report-${{ env.REPORT_TS }}
+
+          # Copy fresh report into timestamped folder
+          cp -r /tmp/allure-report/* report-${{ env.REPORT_TS }}/
+
+          # Also update top-level history for next run restore logic (optional but recommended)
+          rm -rf history
+          cp -r /tmp/allure-report/history history || true
+
           git add .
           git commit -m "Update Allure report ${{ env.REPORT_TS }}" || echo "No changes to commit"
-          
+
           git push origin gh-pages --force
 
       # 2️⃣0️⃣ Push Allure HTML to gh-pages
