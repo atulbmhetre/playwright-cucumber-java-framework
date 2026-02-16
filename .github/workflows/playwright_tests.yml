@@ -20,7 +20,7 @@ on:
         default: "chromium"
 
 jobs:
-  # 🔥 SMOKE JOB: Runs on Push or Manual 'smoke' choice
+  # SMOKE JOB: Runs on Push or Manual 'smoke' choice
   Job_Smoke:
     if: github.event_name == 'push' || github.event.inputs.suite == 'smoke'
     runs-on: ubuntu-latest
@@ -97,7 +97,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: allure-report
 
-  # 🚀 REGRESSION JOB: Runs if Smoke passes OR Manual 'regression' choice
+  # REGRESSION JOB: Runs if Smoke passes OR Manual 'regression' choice
   Job_Regression:
     needs: Job_Smoke
     if: always() && (needs.Job_Smoke.result == 'success' || (github.event_name == 'workflow_dispatch' && github.event.inputs.suite == 'regression'))
