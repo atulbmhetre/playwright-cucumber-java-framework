@@ -40,11 +40,11 @@ jobs:
       BROWSER: ${{ github.event.inputs.browser || 'chromium' }}
       HEADLESS: true
       THREADCOUNT: ${{ github.event.inputs.threadcount || '3' }}
-      # Safe TAGS fallback: always default to @smoke on push
-      TAGS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tags != '' && github.event.inputs.tags || '@smoke' }}
+      TAGS: ${{ github.event.inputs.tags || '@smoke' }}
     steps:
 
-      - name: 0️⃣ Validate mandatory inputs
+      # 0️⃣ Mandatory input check
+      - name: Validate mandatory inputs
         run: |
           if [ -z "$ENV" ]; then
             echo "ERROR: 'env' is mandatory. Please provide - ENV"
@@ -54,192 +54,201 @@ jobs:
             echo "ERROR: 'browser' is mandatory. Please provide - BROWSER"
             exit 1
           fi
-
-      - name: 1️⃣ Checkout Repository Code
+      # 1️⃣ Checkout the repository
+      - name: Checkout Repository Code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: 2️⃣ Display Java Version
+      # 2️⃣ Display Java version
+      - name: Display Java Version
         run: java -version
 
-      - name: 3️⃣ Setup Java 21
+      # 3️⃣ Setup Java 21
+      - name: Setup Java 21
         uses: actions/setup-java@v3
         with:
           distribution: temurin
           java-version: 21
 
-      - name: 4️⃣ Install Allure CLI
+      # 4️⃣ Install Allure CLI
+      - name: Install Allure CLI
         run: |
           wget https://github.com/allure-framework/allure2/releases/download/2.27.0/allure-2.27.0.tgz
           tar -zxvf allure-2.27.0.tgz
           sudo mv allure-2.27.0 /opt/allure
           sudo ln -s /opt/allure/bin/allure /usr/bin/allure
           allure --version
-
-      - name: 5️⃣ Prepare History Folder
+      # 5️⃣ Prepare history folder
+      - name: Prepare History Folder
         run: mkdir -p target/allure-results/history
 
-      - name: 6️⃣ Fetch Existing History from gh-pages safely
+      # 6️⃣ Fetch existing history from gh-pages
+      - name: Fetch Existing History from gh-pages
         run: |
           if git ls-remote --exit-code origin gh-pages; then
             git fetch origin gh-pages
-            git checkout origin/gh-pages -- history-smoke || echo "No previous smoke history folder found, skipping."
+            git checkout origin/gh-pages -- history || echo "No history folder found"
           else
             echo "gh-pages branch does not exist yet. Skipping history restore."
           fi
+      # 7️⃣ Merge existing history into current results
+      - name: Merge Existing History into Allure Results
+        run: cp -r history/* target/allure-results/history/ || echo "No previous history to copy"
 
-      - name: 7️⃣ Merge Existing History into Allure Results
-        run: |
-          if [ -d "history-smoke" ]; then
-            cp -r history-smoke/* target/allure-results/history/
-          fi
-
-      - name: 8️⃣ Display Environment Variables
+      # 8️⃣ Display environment variables
+      - name: Display Environment Variables
         run: env | grep -E 'ENV|BROWSER|HEADLESS|THREADCOUNT|TAGS'
 
-      - name: 9️⃣ Install Node and Playwright Browsers
+      # 9️⃣ Install Node & Playwright
+      - name: Install Node and Playwright Browsers
         run: |
           curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
           sudo apt-get install -y nodejs
           npm install -g playwright
           npx playwright install
-
-      - name: 🔟 Run Test Suite
+      # 🔟 Run Maven tests
+      - name: Run Test Suite
         id: run_tests
         continue-on-error: true
         run: |
-          # clean previous run artifacts
-          rm -rf target/allure-results target/cucumber-reports target/failed_scenarios.txt
-          mkdir -p target/allure-results
-      
-          # enforce tag source
-          export CUCUMBER_FILTER_TAGS="${TAGS}"
-          echo "Using tags: $CUCUMBER_FILTER_TAGS"
-      
           xvfb-run --auto-servernum -- mvn test \
             -Denv=$ENV \
             -Dbrowser=$BROWSER \
             -Dheadless=$HEADLESS \
             -Ddataproviderthreadcount=$THREADCOUNT \
-            -Dcucumber.filter.tags="$CUCUMBER_FILTER_TAGS"
-
-      - name: 1️⃣1️⃣ Write Allure Environment Info
-        run: |
-          REPORT_TS=smoke-${{ github.run_id }}-${{ github.run_attempt }}
-          cat > target/allure-results/environment.properties <<EOF
-          ENV=$ENV
-          BROWSER=$BROWSER
-          HEADLESS=$HEADLESS
-          THREADCOUNT=$THREADCOUNT
-          TAGS=$TAGS
-          JOB=smoke-tests
-          RUN_ID=${{ github.run_id }}
-          RUN_ATTEMPT=${{ github.run_attempt }}
-          EOF
-
-      - name: 1️⃣2️⃣ Backup Allure History
+            -Dcucumber.filter.tags="$TAGS"
+      # 1️⃣1️⃣ Backup history folder with timestamp
+      - name: Backup Allure History
         run: |
           TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
           mkdir -p allure-history-backup
-          if [ -d "target/allure-results/history" ]; then
-            cp -r target/allure-results/history allure-history-backup/history-$TIMESTAMP
-            echo "Backup created at allure-history-backup/history-$TIMESTAMP"
-          else
-            echo "No history folder to backup (first run or test failed before history created)."
-          fi
+          cp -r target/allure-results/history allure-history-backup/history-$TIMESTAMP
+          echo "Backup created at allure-history-backup/history-$TIMESTAMP"
+      # 1️⃣2️⃣ Clean previous Allure reports
+      - name: Clean Old Allure Reports
+        run: rm -rf gh-pages/report-*
 
-      - name: 1️⃣3️⃣ Skip Clean Old Allure Reports
-        run: echo "Skipping cleanup to preserve previous reports"
+      # 1️⃣3️⃣ Set timestamp for report
+      - name: Set Timestamp for Report
+        id: timestamp
+        run: echo "REPORT_TS=$(date +'%Y-%m-%d_%H-%M-%S')" >> $GITHUB_ENV
 
-      - name: 1️⃣4️⃣ Set REPORT_TS shell variable
-        run: echo "REPORT_TS=smoke-${{ github.run_id }}-${{ github.run_attempt }}" >> $GITHUB_ENV
+      # 1️⃣4️⃣ Create temporary report folder
+      - name: Create Temporary Report Folder
+        run: mkdir -p temp-report-${{ env.REPORT_TS }}
 
-      - name: 1️⃣5️⃣ Create Temporary Report Folder
+      # 1️⃣5️⃣ Generate Allure HTML into temp folder
+      - name: Generate Allure HTML
         run: |
-          REPORT_TS=smoke-${{ github.run_id }}-${{ github.run_attempt }}
-          mkdir -p temp-report-$REPORT_TS
-
-      - name: 1️⃣6️⃣ Generate Allure HTML
+          echo "====== ENTERED STEP 15 - GENERATE ALLURE HTML ======"
+          allure generate target/allure-results -o temp-report-${{ env.REPORT_TS }} --clean
+          echo "====== ALLURE HTML GENERATED ======"
+      # 1️⃣6️⃣ Generate Defect Age Report
+      - name: Generate Defect Age Report
         run: |
-          REPORT_TS=smoke-${{ github.run_id }}-${{ github.run_attempt }}
-          allure generate target/allure-results -o temp-report-$REPORT_TS --clean
-
-      - name: 1️⃣7️⃣ Generate Defect Age Report
-        run: |
-          REPORT_TS=smoke-${{ github.run_id }}-${{ github.run_attempt }}
+          echo "====== GENERATING DEFECT AGE REPORT ======"
           mvn test-compile exec:java \
             -Dexec.mainClass=com.samtech.qa.testutilities.AllureDefectAge \
             -Dexec.classpathScope=test \
-            -Dhistory.dir=temp-report-$REPORT_TS/history
-          mkdir -p /tmp/defect-age
-          cp target/defect-age-report.csv /tmp/defect-age/defect-age-report-$REPORT_TS.csv
+            -Dhistory.dir=temp-report-${{ env.REPORT_TS }}/history
+          echo "====== DEFECT AGE REPORT GENERATED ======"
+      # 1️⃣7️⃣ List generated report contents
+      - name: List Generated Report
+        run: ls -l temp-report-${{ env.REPORT_TS }}
 
-      - name: 1️⃣8️⃣ Detect & Upload Latest Failed Locator JSON
-        run: |
-          FILE=$(ls test-output/failedLocators_*.json 2>/dev/null | sort | tail -n 1 || true)
-          if [ -n "$FILE" ]; then
-            echo "FILE_PATH=$FILE" >> $GITHUB_ENV
-          fi
-
-      - name: 1️⃣9️⃣ Configure Git
+      # 1️⃣8️⃣ Configure Git for push
+      - name: Configure Git
         run: |
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
-
-      - name: 2️⃣0️⃣ Commit Allure Report to gh-pages
+      - name: Debug Report Folders
         if: always()
         run: |
-          REPORT_TS=smoke-${{ github.run_id }}-${{ github.run_attempt }}
+          echo "=== ROOT ==="
+          ls -l
+          echo "=== TARGET ==="
+          ls -l target || true
+          echo "=== TEMP REPORTS ==="
+          ls -l temp-report-* || true
+      # 1️⃣9️⃣ Commit Allure HTML to gh-pages (FINAL SAFE VERSION)
+      - name: Commit Allure Report
+        if: always()
+        run: |
+          echo "Preparing safe publish..."
+          
+          # Copy report outside repo first
           mkdir -p /tmp/allure-report
-          cp -r temp-report-$REPORT_TS/* /tmp/allure-report/
+          cp -r temp-report-${{ env.REPORT_TS }}/* /tmp/allure-report/
+          
+          # Clean working tree completely
           git reset --hard
           git clean -fd
+          
           git fetch origin
+          
           if git ls-remote --exit-code origin gh-pages; then
             git checkout gh-pages
           else
             git checkout --orphan gh-pages
           fi
-          mkdir -p report-$REPORT_TS
-          cp -r /tmp/allure-report/* report-$REPORT_TS/
-          rm -rf history-smoke
-          cp -r /tmp/allure-report/history history-smoke || true
+          
+          # Remove everything tracked
+          git rm -rf . || true
+          
+          # Copy fresh report
+          cp -r /tmp/allure-report/* .
+          
           git add .
-          git commit -m "Update Allure report $REPORT_TS" || echo "No changes to commit"
+          git commit -m "Update Allure report ${{ env.REPORT_TS }}" || echo "No changes to commit"
+          
           git push origin gh-pages --force
+      # 2️⃣0️⃣ Push Allure HTML to gh-pages
+      - name: Push Report to GitHub Pages
+        run: git push -u origin gh-pages
 
-      - name: 2️⃣1️⃣ Upload Allure Results Artifact
+      # 2️⃣1️⃣ Upload Allure results as artifact
+      - name: Upload Allure Results Artifact
         uses: actions/upload-artifact@v4
         with:
           name: allure-results
           path: target/allure-results
 
-      - name: 2️⃣2️⃣ Upload Failed Locators Artifact
+      # 2️⃣2️⃣ Upload Latest Failed Locator JSON
+      - name: Detect Latest Failed Locator JSON
+        run: |
+          FILE=$(ls test-output/failedLocators_*.json 2>/dev/null | sort | tail -n 1)
+          if [ -n "$FILE" ]; then
+            echo "FILE_PATH=$FILE" >> $GITHUB_ENV
+          else
+            echo "No failedLocators JSON found."
+          fi
+      - name: Upload Failed Locators Artifact
         if: env.FILE_PATH != ''
         uses: actions/upload-artifact@v4
         with:
           name: Failed_locators
           path: ${{ env.FILE_PATH }}
 
-      - name: 2️⃣3️⃣ Upload Defect Age Report Artifact
+      # 2️⃣3️⃣ Upload Defect Age Report Artifact
+      - name: Upload Defect Age Report Artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: defect-age-report
-          path: /tmp/defect-age/defect-age-report-${{ github.run_id }}-${{ github.run_attempt }}.csv
+          path: target/defect-age-report.csv
           if-no-files-found: warn
 
-      - name: 2️⃣4️⃣ Display GitHub Pages Report URL
+      # 2️⃣4️⃣ Display GitHub Pages report URL
+      - name: Display Report URL
         run: |
-          REPORT_TS=smoke-${{ github.run_id }}-${{ github.run_attempt }}
-          echo "Report URL: https://atulbmhetre.github.io/playwright-cucumber-framework/report-$REPORT_TS"
-
-      - name: 2️⃣5️⃣ Fail job if tests failed
+          echo "Report URL: https://atulbmhetre.github.io/playwright-cucumber-framework/report-${{ env.REPORT_TS }}"
+      # 2️⃣5️⃣ Fail job if tests failed
+      - name: Fail job if tests failed
         if: steps.run_tests.outcome == 'failure'
         run: exit 1
 
   regression-tests:
-    needs: smoke-tests
     if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.suite == 'regression' }}
     runs-on: ubuntu-latest
     env:
@@ -251,8 +260,8 @@ jobs:
       TAGS: ${{ github.event.inputs.tags }}
     steps:
 
-      # Regression steps fully expanded with REPORT_TS="regression-..." and HISTORY="history-regression"
-      - name: 0️⃣ Validate mandatory inputs
+      # 0️⃣ Mandatory input check
+      - name: Validate mandatory inputs
         run: |
           if [ -z "$ENV" ]; then
             echo "ERROR: 'env' is mandatory. Please provide - ENV"
@@ -262,183 +271,191 @@ jobs:
             echo "ERROR: 'browser' is mandatory. Please provide - BROWSER"
             exit 1
           fi
-
-      - name: 1️⃣ Checkout Repository Code
+      # 1️⃣ Checkout the repository
+      - name: Checkout Repository Code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: 2️⃣ Display Java Version
+      # 2️⃣ Display Java version
+      - name: Display Java Version
         run: java -version
 
-      - name: 3️⃣ Setup Java 21
+      # 3️⃣ Setup Java 21
+      - name: Setup Java 21
         uses: actions/setup-java@v3
         with:
           distribution: temurin
           java-version: 21
 
-      - name: 4️⃣ Install Allure CLI
+      # 4️⃣ Install Allure CLI
+      - name: Install Allure CLI
         run: |
           wget https://github.com/allure-framework/allure2/releases/download/2.27.0/allure-2.27.0.tgz
           tar -zxvf allure-2.27.0.tgz
           sudo mv allure-2.27.0 /opt/allure
           sudo ln -s /opt/allure/bin/allure /usr/bin/allure
           allure --version
-
-      - name: 5️⃣ Prepare History Folder
+      # 5️⃣ Prepare history folder
+      - name: Prepare History Folder
         run: mkdir -p target/allure-results/history
 
-      - name: 6️⃣ Fetch Existing History from gh-pages safely
+      # 6️⃣ Fetch existing history from gh-pages
+      - name: Fetch Existing History from gh-pages
         run: |
           if git ls-remote --exit-code origin gh-pages; then
             git fetch origin gh-pages
-            git checkout origin/gh-pages -- history-regression || echo "No previous regression history folder found, skipping."
+            git checkout origin/gh-pages -- history || echo "No history folder found"
           else
             echo "gh-pages branch does not exist yet. Skipping history restore."
           fi
+      # 7️⃣ Merge existing history into current results
+      - name: Merge Existing History into Allure Results
+        run: cp -r history/* target/allure-results/history/ || echo "No previous history to copy"
 
-      - name: 7️⃣ Merge Existing History into Allure Results
-        run: |
-          if [ -d "history-regression" ]; then
-            cp -r history-regression/* target/allure-results/history/
-          fi
-
-      - name: 8️⃣ Display Environment Variables
+      # 8️⃣ Display environment variables
+      - name: Display Environment Variables
         run: env | grep -E 'ENV|BROWSER|HEADLESS|THREADCOUNT|TAGS'
 
-      - name: 9️⃣ Install Node and Playwright Browsers
+      # 9️⃣ Install Node & Playwright
+      - name: Install Node and Playwright Browsers
         run: |
           curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
           sudo apt-get install -y nodejs
           npm install -g playwright
           npx playwright install
-
-      - name: 🔟 Run Test Suite
-        id: run_tests
+      # 🔟 Run Maven tests
+      - name: Run Test Suite
         continue-on-error: true
         run: |
-          REPORT_TS=regression-${{ github.run_id }}-${{ github.run_attempt }}
-          rm -rf target/allure-results target/cucumber-reports target/failed_scenarios.txt
-          mkdir -p target/allure-results
-          export CUCUMBER_FILTER_TAGS="$TAGS"
-          echo "Using tags: $CUCUMBER_FILTER_TAGS"
           xvfb-run --auto-servernum -- mvn test \
             -Denv=$ENV \
             -Dbrowser=$BROWSER \
             -Dheadless=$HEADLESS \
             -Ddataproviderthreadcount=$THREADCOUNT \
-            -Dcucumber.filter.tags="$CUCUMBER_FILTER_TAGS"
-
-      - name: 1️⃣1️⃣ Write Allure Environment Info
-        run: |
-          REPORT_TS=regression-${{ github.run_id }}-${{ github.run_attempt }}
-          cat > target/allure-results/environment.properties <<EOF
-          ENV=$ENV
-          BROWSER=$BROWSER
-          HEADLESS=$HEADLESS
-          THREADCOUNT=$THREADCOUNT
-          TAGS=$TAGS
-          JOB=regression-tests
-          RUN_ID=${{ github.run_id }}
-          RUN_ATTEMPT=${{ github.run_attempt }}
-          EOF
-
-      - name: 1️⃣2️⃣ Backup Allure History
+            -Dcucumber.filter.tags="$TAGS"
+      # 1️⃣1️⃣ Backup history folder with timestamp
+      - name: Backup Allure History
         run: |
           TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
           mkdir -p allure-history-backup
-          if [ -d "target/allure-results/history" ]; then
-            cp -r target/allure-results/history allure-history-backup/history-$TIMESTAMP
-            echo "Backup created at allure-history-backup/history-$TIMESTAMP"
-          else
-            echo "No history folder to backup (first run or test failed before history created)."
-          fi
+          cp -r target/allure-results/history allure-history-backup/history-$TIMESTAMP
+          echo "Backup created at allure-history-backup/history-$TIMESTAMP"
+      # 1️⃣2️⃣ Clean previous Allure reports
+      - name: Clean Old Allure Reports
+        run: rm -rf gh-pages/report-*
 
-      - name: 1️⃣3️⃣ Skip Clean Old Allure Reports
-        run: echo "Skipping cleanup to preserve previous reports"
+      # 1️⃣3️⃣ Set timestamp for report
+      - name: Set Timestamp for Report
+        id: timestamp
+        run: echo "REPORT_TS=$(date +'%Y-%m-%d_%H-%M-%S')" >> $GITHUB_ENV
 
-      - name: 1️⃣4️⃣ Set REPORT_TS shell variable
-        run: echo "REPORT_TS=regression-${{ github.run_id }}-${{ github.run_attempt }}" >> $GITHUB_ENV
+      # 1️⃣4️⃣ Create temporary report folder
+      - name: Create Temporary Report Folder
+        run: mkdir -p temp-report-${{ env.REPORT_TS }}
 
-      - name: 1️⃣5️⃣ Create Temporary Report Folder
+      # 1️⃣5️⃣ Generate Allure HTML into temp folder
+      - name: Generate Allure HTML
         run: |
-          REPORT_TS=regression-${{ github.run_id }}-${{ github.run_attempt }}
-          mkdir -p temp-report-$REPORT_TS
-
-      - name: 1️⃣6️⃣ Generate Allure HTML
+          echo "====== ENTERED STEP 15 - GENERATE ALLURE HTML ======"
+          allure generate target/allure-results -o temp-report-${{ env.REPORT_TS }} --clean
+          echo "====== ALLURE HTML GENERATED ======"
+      # 1️⃣6️⃣ Generate Defect Age Report
+      - name: Generate Defect Age Report
         run: |
-          REPORT_TS=regression-${{ github.run_id }}-${{ github.run_attempt }}
-          allure generate target/allure-results -o temp-report-$REPORT_TS --clean
-
-      - name: 1️⃣7️⃣ Generate Defect Age Report
-        run: |
-          REPORT_TS=regression-${{ github.run_id }}-${{ github.run_attempt }}
+          echo "====== GENERATING DEFECT AGE REPORT ======"
           mvn test-compile exec:java \
             -Dexec.mainClass=com.samtech.qa.testutilities.AllureDefectAge \
             -Dexec.classpathScope=test \
-            -Dhistory.dir=temp-report-$REPORT_TS/history
-          mkdir -p /tmp/defect-age
-          cp target/defect-age-report.csv /tmp/defect-age/defect-age-report-$REPORT_TS.csv
+            -Dhistory.dir=temp-report-${{ env.REPORT_TS }}/history
+          echo "====== DEFECT AGE REPORT GENERATED ======"
+      # 1️⃣7️⃣ List generated report contents
+      - name: List Generated Report
+        run: ls -l temp-report-${{ env.REPORT_TS }}
 
-      - name: 1️⃣8️⃣ Detect & Upload Latest Failed Locator JSON
-        run: |
-          FILE=$(ls test-output/failedLocators_*.json 2>/dev/null | sort | tail -n 1 || true)
-          if [ -n "$FILE" ]; then
-            echo "FILE_PATH=$FILE" >> $GITHUB_ENV
-          fi
-
-      - name: 1️⃣9️⃣ Configure Git
+      # 1️⃣8️⃣ Configure Git for push
+      - name: Configure Git
         run: |
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
-
-      - name: 2️⃣0️⃣ Commit Allure Report to gh-pages
+      - name: Debug Report Folders
         if: always()
         run: |
-          REPORT_TS=regression-${{ github.run_id }}-${{ github.run_attempt }}
+          echo "=== ROOT ==="
+          ls -l
+          echo "=== TARGET ==="
+          ls -l target || true
+          echo "=== TEMP REPORTS ==="
+          ls -l temp-report-* || true
+      # 1️⃣9️⃣ Commit Allure HTML to gh-pages (FINAL SAFE VERSION)
+      - name: Commit Allure Report
+        if: always()
+        run: |
+          echo "Preparing safe publish..."
+          
+          # Copy report outside repo first
           mkdir -p /tmp/allure-report
-          cp -r temp-report-$REPORT_TS/* /tmp/allure-report/
+          cp -r temp-report-${{ env.REPORT_TS }}/* /tmp/allure-report/
+          
+          # Clean working tree completely
           git reset --hard
           git clean -fd
+          
           git fetch origin
+          
           if git ls-remote --exit-code origin gh-pages; then
             git checkout gh-pages
           else
             git checkout --orphan gh-pages
           fi
-          mkdir -p report-$REPORT_TS
-          cp -r /tmp/allure-report/* report-$REPORT_TS/
-          rm -rf history-regression
-          cp -r /tmp/allure-report/history history-regression || true
+          
+          # Remove everything tracked
+          git rm -rf . || true
+          
+          # Copy fresh report
+          cp -r /tmp/allure-report/* .
+          
           git add .
-          git commit -m "Update Allure report $REPORT_TS" || echo "No changes to commit"
+          git commit -m "Update Allure report ${{ env.REPORT_TS }}" || echo "No changes to commit"
+          
           git push origin gh-pages --force
+      # 2️⃣0️⃣ Push Allure HTML to gh-pages
+      - name: Push Report to GitHub Pages
+        run: git push -u origin gh-pages
 
-      - name: 2️⃣1️⃣ Upload Allure Results Artifact
+      # 2️⃣1️⃣ Upload Allure results as artifact
+      - name: Upload Allure Results Artifact
         uses: actions/upload-artifact@v4
         with:
           name: allure-results
           path: target/allure-results
 
-      - name: 2️⃣2️⃣ Upload Failed Locators Artifact
+      # 2️⃣2️⃣ Upload Latest Failed Locator JSON
+      - name: Detect Latest Failed Locator JSON
+        run: |
+          FILE=$(ls test-output/failedLocators_*.json 2>/dev/null | sort | tail -n 1)
+          if [ -n "$FILE" ]; then
+            echo "FILE_PATH=$FILE" >> $GITHUB_ENV
+          else
+            echo "No failedLocators JSON found."
+          fi
+      - name: Upload Failed Locators Artifact
         if: env.FILE_PATH != ''
         uses: actions/upload-artifact@v4
         with:
           name: Failed_locators
           path: ${{ env.FILE_PATH }}
 
-      - name: 2️⃣3️⃣ Upload Defect Age Report Artifact
+      # 2️⃣3️⃣ Upload Defect Age Report Artifact
+      - name: Upload Defect Age Report Artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: defect-age-report
-          path: /tmp/defect-age/defect-age-report-${{ github.run_id }}-${{ github.run_attempt }}.csv
+          path: target/defect-age-report.csv
           if-no-files-found: warn
 
-      - name: 2️⃣4️⃣ Display GitHub Pages Report URL
+      # 2️⃣4️⃣ Display GitHub Pages report URL
+      - name: Display Report URL
         run: |
-          REPORT_TS=regression-${{ github.run_id }}-${{ github.run_attempt }}
-          echo "Report URL: https://atulbmhetre.github.io/playwright-cucumber-framework/report-$REPORT_TS"
-
-      - name: 2️⃣5️⃣ Fail job if tests failed
-        if: steps.run_tests.outcome == 'failure'
-        run: exit 1
+          echo "Report URL: https://atulbmhetre.github.io/playwright-cucumber-framework/report-${{ env.REPORT_TS }}"
