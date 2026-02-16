@@ -12,7 +12,6 @@ public class AllureDefectAge {
         File folder = new File("target/allure-results");
         if (!folder.exists()) return;
 
-        // 1. Timestamped Filename
         String ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
         String fileName = "target/defect-age-report_" + ts + ".csv";
 
@@ -63,6 +62,5 @@ public class AllureDefectAge {
                 w.println(d[0] + "," + d[1] + "," + age + "," + dateStr + "," + d[2]);
             }
         }
-        System.out.println("✅ Generated: " + fileName);
     }
 }
