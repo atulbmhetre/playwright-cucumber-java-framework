@@ -25,92 +25,90 @@ jobs:
     if: github.event_name == 'push' || github.event.inputs.suite == 'smoke'
     runs-on: ubuntu-latest
     steps:
-      # 1️⃣ Setup Environment
       - name: 1. Checkout Repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: 2. Setup Java 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v3
         with:
-          java-version: '21'
           distribution: 'temurin'
-          cache: 'maven'
+          java-version: '21'
 
-      - name: 3. Setup Node.js (OFFICIAL METHOD)
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      # 2️⃣ Install Playwright & Allure (STABLE METHODS)
-      - name: 4. Install Playwright Browsers
-        run: npx playwright install --with-deps
-
-      - name: 5. Install Allure CLI
+      - name: 3. Install Node and Playwright Browsers
         run: |
-          npm install -g allure-commandline --save-dev
+          curl -fsSL https://deb.nodesource.com | sudo -E bash -
+          sudo apt-get install -y nodejs
+          npx playwright install --with-deps
 
-      # 3️⃣ History & Test Execution
-      - name: 6. Restore Allure History
+      - name: 4. Install Allure CLI
+        run: |
+          wget https://github.com
+          tar -zxvf allure-2.27.0.tgz
+          sudo mv allure-2.27.0 /opt/allure
+          sudo ln -s /opt/allure/bin/allure /usr/bin/allure
+
+      - name: 5. Fetch History for Defect Age
         continue-on-error: true
         run: |
           git fetch origin gh-pages
           git checkout origin/gh-pages -- history || echo "No history found"
           mkdir -p target/allure-results/history
-          cp -r history/* target/allure-results/history/ || echo "No previous history"
+          cp -r history/* target/allure-results/history/ || echo "No previous history to copy"
 
-      - name: 7. Run Smoke Tests
+      - name: 6. Run Smoke Tests
         id: run_tests
         continue-on-error: true
         run: |
-          mvn test -Dgroups=smoke \
-          -Denv=${{ github.event.inputs.env || 'qa' }} \
-          -Dbrowser=${{ github.event.inputs.browser || 'chromium' }}
+          xvfb-run --auto-servernum -- mvn test \
+            -Denv=${{ github.event.inputs.env || 'qa' }} \
+            -Dbrowser=${{ github.event.inputs.browser || 'chromium' }} \
+            -Dcucumber.filter.tags="@smoke"
 
-      # 4️⃣ Reporting & Custom Defect Age
-      - name: 8. Generate Defect Age & Allure Report
+      - name: 7. Generate Defect Age & Allure Report
         if: always()
         run: |
-          # 1. Run your Java Class for CSV
           mvn test-compile exec:java -Dexec.mainClass="com.samtech.qa.testutilities.AllureDefectAge" -Dexec.classpathScope=test
-          # 2. Generate Allure Report
           allure generate target/allure-results -o allure-report --clean
 
-      # 5️⃣ Artifact Detection (Your dynamic logic)
-      - name: 9. Detect Latest Locator JSON
+      - name: 8. Detect and Upload Artifacts
         if: always()
         run: |
           FILE=$(ls test-output/failedLocators_*.json 2>/dev/null | sort | tail -n 1)
           if [ -n "$FILE" ]; then echo "LOCATOR_FILE=$FILE" >> $GITHUB_ENV; fi
 
-      - name: 10. Archive All Execution Data
+      - name: 9. Archive Final Data
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Smoke_Execution_Run_${{ github.run_number }}
+          name: Smoke_Artifacts_Run_${{ github.run_number }}
           path: |
             target/defect-age-report.csv
             ${{ env.LOCATOR_FILE }}
             allure-report
 
-      # 6️⃣ Deploy to GH-Pages
-      - name: 11. Publish to GitHub Pages
+      - name: 10. Deploy to GH-Pages
         if: always()
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: allure-report
 
-      - name: 12. Final Status Check
+      - name: 11. Fail Job if Tests Failed
         if: steps.run_tests.outcome == 'failure'
         run: exit 1
 
-  # REGRESSION JOB
   regression-tests:
     needs: smoke-tests
     if: always() && (needs.smoke-tests.result == 'success' || (github.event_name == 'workflow_dispatch' && github.event.inputs.suite == 'regression'))
     runs-on: ubuntu-latest
     steps:
-      - name: 1. Setup & Run Regression
-        run: echo "Repeat steps 1-12 with regression parameters"
+      - name: Setup and Run Regression
+        run: |
+          # (Duplicate Setup/Install steps 1-5 here)
+          xvfb-run --auto-servernum -- mvn test \
+            -Denv=${{ github.event.inputs.env }} \
+            -Dbrowser=${{ github.event.inputs.browser }} \
+            -Dcucumber.filter.tags="@regression"
+          # (Duplicate Reporting steps 7-11 here)
