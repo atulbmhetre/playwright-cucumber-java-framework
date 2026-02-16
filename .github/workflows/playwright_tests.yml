@@ -12,11 +12,9 @@ on:
         type: choice
         options: [smoke, regression]
       env:
-        description: "Environment"
         required: true
         default: "qa"
       browser:
-        description: "Browser"
         required: true
         default: "chromium"
 
@@ -42,42 +40,41 @@ jobs:
         with:
           node-version: 20
 
-      - name: 4. Install Playwright Browsers
-        run: npx playwright install --with-deps
+      - name: 4. Install Tools
+        run: |
+          npx playwright install --with-deps
+          npm install -g allure-commandline
 
-      - name: 5. Install Allure CLI
-        run: npm install -g allure-commandline
-
-      - name: 6. Restore Allure History
+      - name: 5. Restore Smoke History (Isolated)
         continue-on-error: true
         run: |
           git fetch origin gh-pages
-          git checkout origin/gh-pages -- history || echo "No history found"
+          git checkout origin/gh-pages -- smoke-report/history || echo "No smoke history yet"
           mkdir -p target/allure-results/history
-          cp -r history/* target/allure-results/history/ || echo "No previous history to copy"
+          cp -r smoke-report/history/* target/allure-results/history/ 2>/dev/null || true
 
-      - name: 7. Run Smoke Tests
+      - name: 6. Run Smoke Tests
         id: run_tests
         continue-on-error: true
         run: |
           xvfb-run --auto-servernum -- mvn test \
-            -Denv=${{ github.event.inputs.env || 'qa' }} \
-            -Dbrowser=${{ github.event.inputs.browser || 'chromium' }} \
-            -Dcucumber.filter.tags="@smoke"
+          -Denv=${{ github.event.inputs.env || 'qa' }} \
+          -Dbrowser=${{ github.event.inputs.browser || 'chromium' }} \
+          -Dcucumber.filter.tags="@smoke"
 
-      - name: 8. Generate Smoke Reports
+      - name: 7. Generate Smoke Reports
         if: always()
         run: |
           mvn exec:java -Dexec.mainClass="com.samtech.qa.testutilities.AllureDefectAge" -Dexec.classpathScope=test
-          allure generate target/allure-results -o allure-report --clean
+          allure generate target/allure-results -o allure-report-smoke --clean
 
-      - name: 9. Detect Latest Locator JSON
+      - name: 8. Detect Latest Locator JSON
         if: always()
         run: |
           FILE=$(ls test-output/failedLocators_*.json 2>/dev/null | sort | tail -n 1)
           if [ -n "$FILE" ]; then echo "LOCATOR_FILE=$FILE" >> $GITHUB_ENV; fi
 
-      - name: 10. Archive Smoke Data
+      - name: 9. Archive Smoke Data
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -85,16 +82,18 @@ jobs:
           path: |
             target/defect-age-report_*.csv
             ${{ env.LOCATOR_FILE }}
-            allure-report
+            allure-report-smoke
 
-      - name: 11. Publish Smoke to GitHub Pages
+      - name: 10. Deploy Smoke to Isolated Folder
         if: always()
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: allure-report
+          publish_dir: allure-report-smoke
+          destination_dir: smoke-report
+          keep_files: true
 
-      - name: 12. Final Status Check
+      - name: 11. Status Check
         if: steps.run_tests.outcome == 'failure'
         run: exit 1
 
@@ -120,54 +119,41 @@ jobs:
         with:
           node-version: 20
 
-      - name: 4. Install Playwright Browsers
-        run: npx playwright install --with-deps
+      - name: 4. Install Tools
+        run: |
+          npx playwright install --with-deps
+          npm install -g allure-commandline
 
-      - name: 5. Install Allure CLI
-        run: npm install -g allure-commandline
-
-      - name: 6. Restore & Backup History
+      - name: 5. Restore Regression History (Isolated)
         continue-on-error: true
         run: |
           git fetch origin gh-pages
-          git checkout origin/gh-pages -- history || git checkout origin/gh-pages -- regression-report/history || echo "No history found"
-          # BACKUP ONLY the history.json file to a safe temp spot
-          mkdir -p /tmp/allure_history_safe
-          cp history/history.json /tmp/allure_history_safe/ 2>/dev/null || cp regression-report/history/history.json /tmp/allure_history_safe/ 2>/dev/null || echo "No history.json found"
+          git checkout origin/gh-pages -- regression-report/history || echo "No regression history yet"
+          mkdir -p target/allure-results/history
+          cp -r regression-report/history/* target/allure-results/history/ 2>/dev/null || true
 
-      - name: 7. Run Regression Tests
+      - name: 6. Run Regression Tests
         id: reg_run
         continue-on-error: true
         run: |
-          # Use a DIFFERENT output directory for Allure to prevent any overlap
           xvfb-run --auto-servernum -- mvn clean test \
-            -Denv=${{ github.event.inputs.env || 'qa' }} \
-            -Dbrowser=${{ github.event.inputs.browser || 'chromium' }} \
-            -Dcucumber.filter.tags="@regression" \
-            -Dallure.results.directory=target/regression-results
+          -Denv=${{ github.event.inputs.env || 'qa' }} \
+          -Dbrowser=${{ github.event.inputs.browser || 'chromium' }} \
+          -Dcucumber.filter.tags="@regression"
 
-      - name: 8. Generate Pure Regression Reports
+      - name: 7. Generate Regression Reports
         if: always()
         run: |
-          # 1. Restore only history.json into the NEW regression-results folder
-          mkdir -p target/regression-results/history
-          cp /tmp/allure_history_safe/history.json target/regression-results/history/ || echo "No history to restore"
-          
-          # 2. Tell the Java class to look at the NEW folder
-          mvn exec:java -Dexec.mainClass="com.samtech.qa.testutilities.AllureDefectAge" \
-            -Dexec.args="target/regression-results" \
-            -Dexec.classpathScope=test
-          
-          # 3. Generate Allure Report from the NEW folder
-          allure generate target/regression-results -o allure-report-regression --clean
+          mvn exec:java -Dexec.mainClass="com.samtech.qa.testutilities.AllureDefectAge" -Dexec.classpathScope=test
+          allure generate target/allure-results -o allure-report-regression --clean
 
-      - name: 9. Detect Latest Locator JSON
+      - name: 8. Detect Latest Locator JSON
         if: always()
         run: |
           FILE=$(ls test-output/failedLocators_*.json 2>/dev/null | sort | tail -n 1)
           if [ -n "$FILE" ]; then echo "REG_LOCATOR=$FILE" >> $GITHUB_ENV; fi
 
-      - name: 10. Archive Regression Data
+      - name: 9. Archive Regression Data
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -177,7 +163,7 @@ jobs:
             ${{ env.REG_LOCATOR }}
             allure-report-regression
 
-      - name: 11. Publish Regression to GitHub Pages
+      - name: 10. Deploy Regression to Isolated Folder
         if: always()
         uses: peaceiris/actions-gh-pages@v3
         with:
@@ -186,6 +172,6 @@ jobs:
           destination_dir: regression-report
           keep_files: true
 
-      - name: 12. Regression Status Check
+      - name: 11. Status Check
         if: steps.reg_run.outcome == 'failure'
         run: exit 1
