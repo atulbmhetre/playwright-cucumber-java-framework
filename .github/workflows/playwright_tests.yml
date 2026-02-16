@@ -126,40 +126,37 @@ jobs:
       - name: 5. Install Allure CLI
         run: npm install -g allure-commandline
 
-      - name: 6. Restore Allure History
+      - name: 6. Restore & Backup History
         continue-on-error: true
         run: |
           git fetch origin gh-pages
           git checkout origin/gh-pages -- history || git checkout origin/gh-pages -- regression-report/history || echo "No history found"
-          # BACKUP to /tmp so 'mvn clean' in the next step doesn't delete it
-          mkdir -p /tmp/history_backup
-          cp -r history/* /tmp/history_backup/ 2>/dev/null || cp -r regression-report/history/* /tmp/history_backup/ 2>/dev/null || true
+          # Only backup the history.json file, nothing else
+          mkdir -p /tmp/history_only
+          cp history/history.json /tmp/history_only/ 2>/dev/null || cp regression-report/history/history.json /tmp/history_only/ 2>/dev/null || echo "No history.json to backup"
 
       - name: 7. Run Regression Tests
         id: reg_run
         continue-on-error: true
         run: |
-          # 1. Force delete the results folder to ensure NO smoke data survives
+          # COMPLETELY wipe results to ensure Environment Config and Tests are fresh
           rm -rf target/allure-results
-          mkdir -p target/allure-results
-          
-          # 2. Run tests (This will generate fresh environment.properties and JSONs)
           xvfb-run --auto-servernum -- mvn clean test \
             -Denv=${{ github.event.inputs.env || 'qa' }} \
             -Dbrowser=${{ github.event.inputs.browser || 'chromium' }} \
             -Dcucumber.filter.tags="@regression"
 
-      - name: 8. Generate Regression Reports
+      - name: 8. Generate Isolated Regression Reports
         if: always()
         run: |
-          # 3. ONLY restore the history files (don't restore old smoke result JSONs)
+          # Restore ONLY history.json into the fresh target
           mkdir -p target/allure-results/history
-          cp -r /tmp/history_backup/*.json target/allure-results/history/ 2>/dev/null || echo "No history files found"
+          cp /tmp/history_only/history.json target/allure-results/history/ || echo "No history to restore"
           
-          # 4. Generate CSV (it sees fresh results + restored history)
+          # Run Defect Age CSV
           mvn exec:java -Dexec.mainClass="com.samtech.qa.testutilities.AllureDefectAge" -Dexec.classpathScope=test
           
-          # 5. Generate Report (Will ONLY show regression tests now)
+          # Generate Allure Report (will now be 100% pure Regression)
           allure generate target/allure-results -o allure-report-regression --clean
 
       - name: 9. Detect Latest Locator JSON
