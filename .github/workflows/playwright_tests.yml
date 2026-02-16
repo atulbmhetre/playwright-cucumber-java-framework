@@ -40,7 +40,8 @@ jobs:
       BROWSER: ${{ github.event.inputs.browser || 'chromium' }}
       HEADLESS: true
       THREADCOUNT: ${{ github.event.inputs.threadcount || '3' }}
-      TAGS: ${{ github.event.inputs.tags || '@smoke' }}
+      # Safe TAGS fallback: always default to @smoke on push
+      TAGS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tags != '' && github.event.inputs.tags || '@smoke' }}
     steps:
 
       - name: 0️⃣ Validate mandatory inputs
@@ -108,11 +109,14 @@ jobs:
         id: run_tests
         continue-on-error: true
         run: |
-          REPORT_TS=smoke-${{ github.run_id }}-${{ github.run_attempt }}
+          # clean previous run artifacts
           rm -rf target/allure-results target/cucumber-reports target/failed_scenarios.txt
           mkdir -p target/allure-results
-          export CUCUMBER_FILTER_TAGS="$TAGS"
+      
+          # enforce tag source
+          export CUCUMBER_FILTER_TAGS="${TAGS}"
           echo "Using tags: $CUCUMBER_FILTER_TAGS"
+      
           xvfb-run --auto-servernum -- mvn test \
             -Denv=$ENV \
             -Dbrowser=$BROWSER \
