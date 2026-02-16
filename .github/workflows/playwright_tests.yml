@@ -141,26 +141,32 @@ jobs:
           -Dbrowser=${{ github.event.inputs.browser || 'chromium' }} \
           -Dcucumber.filter.tags="@regression"
 
-      - name: 7. Generate Regression Reports
+      - name: 7. Generate Isolated Regression Reports
         if: always()
         run: |
+          # 1. Create a 100% clean sandbox for Regression
+          mkdir -p /tmp/regression_sandbox/history
+          
+          # 2. Copy ONLY current Regression JSON results (no environment yet)
+          cp target/allure-results/*-result.json /tmp/regression_sandbox/ 2>/dev/null || true
+          cp target/allure-results/environment.properties /tmp/regression_sandbox/ 2>/dev/null || true
+          
+          # 3. Restore ONLY the history.json (the one we backed up in step 5)
+          cp /tmp/history_backup/history.json /tmp/regression_sandbox/history/ 2>/dev/null || cp /tmp/history_backup/regression-report/history/history.json /tmp/regression_sandbox/history/ 2>/dev/null || echo "No history to restore"
+          
+          # 4. Generate Defect Age CSV (it still looks at target/allure-results)
           mvn exec:java -Dexec.mainClass="com.samtech.qa.testutilities.AllureDefectAge" -Dexec.classpathScope=test
-          allure generate target/allure-results -o allure-report-regression --clean
+          
+          # 5. Generate Allure Report FROM THE CLEAN SANDBOX
+          allure generate /tmp/regression_sandbox -o allure-report-regression --clean
 
-      - name: 8. Detect Latest Locator JSON
-        if: always()
-        run: |
-          FILE=$(ls test-output/failedLocators_*.json 2>/dev/null | sort | tail -n 1)
-          if [ -n "$FILE" ]; then echo "REG_LOCATOR=$FILE" >> $GITHUB_ENV; fi
-
-      - name: 9. Archive Regression Data
+      - name: 8. Archive Regression Data
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: Regression_Data_Run_${{ github.run_number }}
           path: |
             target/defect-age-report_*.csv
-            ${{ env.REG_LOCATOR }}
             allure-report-regression
 
       - name: 10. Deploy Regression to Isolated Folder
