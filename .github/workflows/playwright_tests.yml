@@ -1,4 +1,4 @@
-name: Playwright Cucumber CI
+name: Playwright Cucumber Allure CI
 
 on:
   push:
@@ -12,20 +12,20 @@ on:
         type: choice
         options: [smoke, regression]
       env:
-        description: "Environment (Mandatory for Regression)"
-        required: false
+        description: "Environment (Mandatory for Manual Run)"
+        required: true
+        default: "qa"
       browser:
-        description: "Browser"
+        description: "Browser (Mandatory for Manual Run)"
         required: true
         default: "chromium"
 
 jobs:
-  # SMOKE JOB: Runs on Push or Manual 'smoke' choice
-  Job_Smoke:
+  smoke-tests:
     if: github.event_name == 'push' || github.event.inputs.suite == 'smoke'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
+      - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -42,7 +42,7 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install Playwright & Allure
+      - name: Install Dependencies
         run: |
           npx playwright install --with-deps
           npm install -g allure-commandline
@@ -51,36 +51,34 @@ jobs:
         continue-on-error: true
         run: |
           git fetch origin gh-pages
-          git checkout origin/gh-pages -- history || echo "No history"
+          git checkout origin/gh-pages -- history || echo "No history found"
           mkdir -p target/allure-results/history
           cp -r history/* target/allure-results/history/ || true
 
       - name: Run Smoke Tests
         id: run_tests
+        continue-on-error: true
         run: |
-          # xvfb-run handles the 'Missing X server' error for maximized browsers
           xvfb-run --auto-servernum -- mvn test \
           -Denv=${{ github.event.inputs.env || 'qa' }} \
           -Dbrowser=${{ github.event.inputs.browser || 'chromium' }} \
           -Dcucumber.filter.tags="@smoke"
 
-      - name: Generate Defect Age & Allure Report
+      - name: Generate Reports
         if: always()
         run: |
-          # Runs the class directly using the command line (ignores POM config)
-          mvn exec:java -Dexec.mainClass="com.samtech.qa.testutilities.AllureDefectAge" -Dexec.classpathScope="test"
-          
-          # Generates Allure HTML
+          # Generate Defect Age CSV without POM changes
+          mvn exec:java -Dexec.mainClass="com.samtech.qa.testutilities.AllureDefectAge" -Dexec.classpathScope=test
+          # Generate Allure HTML
           allure generate target/allure-results -o allure-report --clean
 
-      - name: Detect and Upload Artifacts
+      - name: Detect Latest Locator JSON
         if: always()
         run: |
-          # Finding latest timestamped failed locator JSON
           LOC_FILE=$(ls test-output/failedLocators_*.json 2>/dev/null | sort | tail -n 1)
           echo "LATEST_LOCATOR=$LOC_FILE" >> $GITHUB_ENV
 
-      - name: Publish Data
+      - name: Archive Smoke Artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -97,31 +95,46 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: allure-report
 
-  # REGRESSION JOB: Runs if Smoke passes OR Manual 'regression' choice
-  Job_Regression:
-    needs: Job_Smoke
-    if: always() && (needs.Job_Smoke.result == 'success' || (github.event_name == 'workflow_dispatch' && github.event.inputs.suite == 'regression'))
+      - name: Fail if tests failed
+        if: steps.run_tests.outcome == 'failure'
+        run: exit 1
+
+  regression-tests:
+    needs: smoke-tests
+    # Fix Case 3: Triggers if Smoke is SUCCESS OR if specifically requested via Manual UI
+    if: |
+      always() && 
+      (needs.smoke-tests.result == 'success' || (github.event_name == 'workflow_dispatch' && github.event.inputs.suite == 'regression'))
     runs-on: ubuntu-latest
     steps:
       - name: Checkout & Setup
         uses: actions/checkout@v4
-      - name: Setup Environment
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
-      - name: Check Mandatory Inputs
-        run: |
-          if [ -z "${{ github.event.inputs.env }}" ]; then echo "Env is mandatory for Regression"; exit 1; fi
       - name: Install Playwright
         run: npx playwright install --with-deps
+
       - name: Run Regression
+        id: reg_run
+        continue-on-error: true
         run: |
           xvfb-run --auto-servernum -- mvn test \
-          -Denv=${{ github.event.inputs.env }} \
-          -Dbrowser=${{ github.event.inputs.browser }} \
+          -Denv=${{ github.event.inputs.env || 'qa' }} \
+          -Dbrowser=${{ github.event.inputs.browser || 'chromium' }} \
           -Dcucumber.filter.tags="@regression"
-      - name: Archive Regression Results
+
+      - name: Generate Regression Reports
+        if: always()
+        run: |
+          # Same reporting logic as smoke
+          mvn exec:java -Dexec.mainClass="com.samtech.qa.testutilities.AllureDefectAge" -Dexec.classpathScope=test
+          npm install -g allure-commandline
+          allure generate target/allure-results -o allure-report-regression --clean
+
+      - name: Archive Regression Artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -129,3 +142,12 @@ jobs:
           path: |
             target/defect-age-report.csv
             test-output/failedLocators_*.json
+            allure-report-regression
+
+      - name: Deploy Regression to GH-Pages
+        if: always()
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: allure-report-regression
+          destination_dir: regression-report
