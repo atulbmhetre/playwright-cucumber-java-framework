@@ -123,38 +123,36 @@ jobs:
       - name: 4. Install Playwright Browsers
         run: npx playwright install --with-deps
 
-      - name: 5. Restore Allure History
+      - name: 5. Install Allure CLI
+        run: npm install -g allure-commandline
+
+      - name: 6. Restore Allure History
         continue-on-error: true
         run: |
           git fetch origin gh-pages
           git checkout origin/gh-pages -- history || git checkout origin/gh-pages -- regression-report/history || echo "No history found"
-          # BACKUP to /tmp so 'mvn clean' can't touch it
+          # BACKUP to /tmp so 'mvn clean' in the next step doesn't delete it
           mkdir -p /tmp/history_backup
           cp -r history/* /tmp/history_backup/ 2>/dev/null || cp -r regression-report/history/* /tmp/history_backup/ 2>/dev/null || true
 
-      - name: 6. Run Regression Tests
+      - name: 7. Run Regression Tests
         id: reg_run
         continue-on-error: true
         run: |
-          # 'mvn clean' wipes the target folder
+          # 'mvn clean' is needed for fresh Env Config, but it wipes the target folder
           xvfb-run --auto-servernum -- mvn clean test \
             -Denv=${{ github.event.inputs.env || 'qa' }} \
             -Dbrowser=${{ github.event.inputs.browser || 'chromium' }} \
             -Dcucumber.filter.tags="@regression"
 
-      - name: 7. Generate Regression Reports
-        if: always()
-        run: |
-          # RESTORE history from /tmp into the new target folder
-          mkdir -p target/allure-results/history
-          cp -r /tmp/history_backup/* target/allure-results/history/ || echo "No backup to restore"
-          
-          mvn exec:java -Dexec.mainClass="com.samtech.qa.testutilities.AllureDefectAge" -Dexec.classpathScope=test
-          allure generate target/allure-results -o allure-report-regression --clean
-
       - name: 8. Generate Regression Reports
         if: always()
         run: |
+          # RESTORE history from /tmp into the new target folder created by mvn test
+          mkdir -p target/allure-results/history
+          cp -r /tmp/history_backup/* target/allure-results/history/ || echo "No backup to restore"
+          
+          # Now run Defect Age (it will see the history) and Allure
           mvn exec:java -Dexec.mainClass="com.samtech.qa.testutilities.AllureDefectAge" -Dexec.classpathScope=test
           allure generate target/allure-results -o allure-report-regression --clean
 
