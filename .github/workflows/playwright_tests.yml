@@ -131,33 +131,40 @@ jobs:
         run: |
           git fetch origin gh-pages
           git checkout origin/gh-pages -- history || git checkout origin/gh-pages -- regression-report/history || echo "No history found"
-          # Only backup the history.json file, nothing else
-          mkdir -p /tmp/history_only
-          cp history/history.json /tmp/history_only/ 2>/dev/null || cp regression-report/history/history.json /tmp/history_only/ 2>/dev/null || echo "No history.json to backup"
+          # BACKUP ONLY history.json to /tmp
+          mkdir -p /tmp/allure_history
+          cp history/history.json /tmp/allure_history/ 2>/dev/null || cp regression-report/history/history.json /tmp/allure_history/ 2>/dev/null || echo "No history.json found"
 
       - name: 7. Run Regression Tests
         id: reg_run
         continue-on-error: true
         run: |
-          # COMPLETELY wipe results to ensure Environment Config and Tests are fresh
+          # 1. DELETE the results folder completely
           rm -rf target/allure-results
+          # 2. Run tests - this creates a FRESH target/allure-results
           xvfb-run --auto-servernum -- mvn clean test \
             -Denv=${{ github.event.inputs.env || 'qa' }} \
             -Dbrowser=${{ github.event.inputs.browser || 'chromium' }} \
             -Dcucumber.filter.tags="@regression"
 
-      - name: 8. Generate Isolated Regression Reports
+      - name: 8. Generate Isolated Reports
         if: always()
         run: |
-          # Restore ONLY history.json into the fresh target
-          mkdir -p target/allure-results/history
-          cp /tmp/history_only/history.json target/allure-results/history/ || echo "No history to restore"
+          # 3. Create an ISOLATED results directory to be 100% safe
+          mkdir -p /tmp/pure_regression/history
           
-          # Run Defect Age CSV
+          # 4. Copy ONLY fresh regression results (JSON + properties)
+          cp target/allure-results/*-result.json /tmp/pure_regression/ 2>/dev/null || true
+          cp target/allure-results/environment.properties /tmp/pure_regression/ 2>/dev/null || true
+          
+          # 5. Copy ONLY the backed-up history.json
+          cp /tmp/allure_history/history.json /tmp/pure_regression/history/ 2>/dev/null || true
+          
+          # 6. Run Defect Age on the FRESH target first
           mvn exec:java -Dexec.mainClass="com.samtech.qa.testutilities.AllureDefectAge" -Dexec.classpathScope=test
           
-          # Generate Allure Report (will now be 100% pure Regression)
-          allure generate target/allure-results -o allure-report-regression --clean
+          # 7. Generate Allure Report FROM THE ISOLATED FOLDER
+          allure generate /tmp/pure_regression -o allure-report-regression --clean
 
       - name: 9. Detect Latest Locator JSON
         if: always()

@@ -26,10 +26,10 @@ public class AllureDefectAge {
             if (status.equals("failed") || status.equals("broken")) {
                 String id = r.path("historyId").asText("unknown");
                 defects.put(id, new String[]{
-                        r.path("fullName").asText("N/A"),
-                        r.path("name").asText("N/A"),
-                        r.path("statusDetails").path("message").asText("No Msg").replace(",", ";").replace("\n", " "),
-                        String.valueOf(r.path("start").asLong(0))
+                        r.path("fullName").asText("N/A"), // data[0]
+                        r.path("name").asText("N/A"),     // data[1]
+                        r.path("statusDetails").path("message").asText("No Msg").replace(",", ";").replace("\n", " "), // data[2]
+                        String.valueOf(r.path("start").asLong(0)) // data[3]
                 });
             }
         }
