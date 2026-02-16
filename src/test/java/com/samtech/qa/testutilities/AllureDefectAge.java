@@ -7,6 +7,7 @@ import java.util.*;
 
 public class AllureDefectAge {
     public static void main(String[] args) throws IOException {
+        System.out.println("Defect Age csv generation started.");
         File folder = new File("target/allure-results");
         if (!folder.exists()) return;
 
