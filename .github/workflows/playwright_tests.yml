@@ -12,11 +12,11 @@ on:
         type: choice
         options: [smoke, regression]
       env:
-        description: "Environment (Mandatory for Manual Run)"
+        description: "Environment"
         required: true
         default: "qa"
       browser:
-        description: "Browser (Mandatory for Manual Run)"
+        description: "Browser"
         required: true
         default: "chromium"
 
@@ -37,23 +37,24 @@ jobs:
           distribution: 'temurin'
           cache: 'maven'
 
-      - name: Setup Node
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      - name: Install Dependencies
-        run: |
-          npx playwright install --with-deps
-          npm install -g allure-commandline
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps
 
-      - name: Restore History
+      - name: Install Allure CLI
+        run: npm install -g allure-commandline
+
+      - name: Restore Allure History
         continue-on-error: true
         run: |
           git fetch origin gh-pages
           git checkout origin/gh-pages -- history || echo "No history found"
           mkdir -p target/allure-results/history
-          cp -r history/* target/allure-results/history/ || true
+          cp -r history/* target/allure-results/history/ || echo "No previous history"
 
       - name: Run Smoke Tests
         id: run_tests
@@ -64,64 +65,80 @@ jobs:
           -Dbrowser=${{ github.event.inputs.browser || 'chromium' }} \
           -Dcucumber.filter.tags="@smoke"
 
-      - name: Generate Reports
+      - name: Generate Smoke Reports
         if: always()
         run: |
-          # Generate Defect Age CSV without POM changes
           mvn exec:java -Dexec.mainClass="com.samtech.qa.testutilities.AllureDefectAge" -Dexec.classpathScope=test
-          # Generate Allure HTML
           allure generate target/allure-results -o allure-report --clean
 
       - name: Detect Latest Locator JSON
         if: always()
         run: |
-          LOC_FILE=$(ls test-output/failedLocators_*.json 2>/dev/null | sort | tail -n 1)
-          echo "LATEST_LOCATOR=$LOC_FILE" >> $GITHUB_ENV
+          FILE=$(ls test-output/failedLocators_*.json 2>/dev/null | sort | tail -n 1)
+          if [ -n "$FILE" ]; then echo "LOCATOR_FILE=$FILE" >> $GITHUB_ENV; fi
 
-      - name: Archive Smoke Artifacts
+      - name: Archive Smoke Data
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: Smoke_Data_Run_${{ github.run_number }}
           path: |
-            target/defect-age-report.csv
-            ${{ env.LATEST_LOCATOR }}
+            target/defect-age-report_*.csv
+            ${{ env.LOCATOR_FILE }}
             allure-report
 
-      - name: Deploy to GH-Pages
+      - name: Publish to GitHub Pages
         if: always()
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: allure-report
 
-      - name: Fail if tests failed
+      - name: Final Status Check
         if: steps.run_tests.outcome == 'failure'
         run: exit 1
 
   regression-tests:
     needs: smoke-tests
-    # Fix Case 3: Triggers if Smoke is SUCCESS OR if specifically requested via Manual UI
-    if: |
-      always() && 
-      (needs.smoke-tests.result == 'success' || (github.event_name == 'workflow_dispatch' && github.event.inputs.suite == 'regression'))
+    if: always() && (needs.smoke-tests.result == 'success' || (github.event_name == 'workflow_dispatch' && github.event.inputs.suite == 'regression'))
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout & Setup
+      - name: Checkout Repository
         uses: actions/checkout@v4
-      - name: Setup Java
+        with:
+          fetch-depth: 0
+
+      - name: Setup Java 21
         uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
-      - name: Install Playwright
+          cache: 'maven'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Playwright Browsers
         run: npx playwright install --with-deps
 
-      - name: Run Regression
+      - name: Install Allure CLI
+        run: npm install -g allure-commandline
+
+      - name: Restore Allure History
+        continue-on-error: true
+        run: |
+          git fetch origin gh-pages
+          git checkout origin/gh-pages -- history || echo "No history found"
+          mkdir -p target/allure-results/history
+          cp -r history/* target/allure-results/history/ || echo "No previous history"
+
+      - name: Run Regression Tests
         id: reg_run
         continue-on-error: true
         run: |
-          xvfb-run --auto-servernum -- mvn test \
+          xvfb-run --auto-servernum -- mvn clean test \
           -Denv=${{ github.event.inputs.env || 'qa' }} \
           -Dbrowser=${{ github.event.inputs.browser || 'chromium' }} \
           -Dcucumber.filter.tags="@regression"
@@ -129,25 +146,34 @@ jobs:
       - name: Generate Regression Reports
         if: always()
         run: |
-          # Same reporting logic as smoke
           mvn exec:java -Dexec.mainClass="com.samtech.qa.testutilities.AllureDefectAge" -Dexec.classpathScope=test
-          npm install -g allure-commandline
           allure generate target/allure-results -o allure-report-regression --clean
 
-      - name: Archive Regression Artifacts
+      - name: Detect Latest Locator JSON
+        if: always()
+        run: |
+          FILE=$(ls test-output/failedLocators_*.json 2>/dev/null | sort | tail -n 1)
+          if [ -n "$FILE" ]; then echo "REG_LOCATOR=$FILE" >> $GITHUB_ENV; fi
+
+      - name: Archive Regression Data
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: Regression_Data_Run_${{ github.run_number }}
           path: |
-            target/defect-age-report.csv
-            test-output/failedLocators_*.json
+            target/defect-age-report_*.csv
+            ${{ env.REG_LOCATOR }}
             allure-report-regression
 
-      - name: Deploy Regression to GH-Pages
+      - name: Publish Regression to GitHub Pages
         if: always()
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: allure-report-regression
           destination_dir: regression-report
+          keep_files: true
+
+      - name: Regression Status Check
+        if: steps.reg_run.outcome == 'failure'
+        run: exit 1
