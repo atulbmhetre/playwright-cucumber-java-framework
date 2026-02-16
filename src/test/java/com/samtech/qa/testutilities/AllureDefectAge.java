@@ -12,6 +12,7 @@ public class AllureDefectAge {
         File folder = new File("target/allure-results");
         if (!folder.exists()) return;
 
+        // 1. Generate timestamp for the filename
         String ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
         String fileName = "target/defect-age-report_" + ts + ".csv";
 
@@ -19,6 +20,7 @@ public class AllureDefectAge {
         File[] files = folder.listFiles((d, n) -> n.endsWith("-result.json"));
         if (files == null) return;
 
+        // 2. Map current defects
         Map<String, String[]> defects = new HashMap<>();
         for (File f : files) {
             JsonNode r = mapper.readTree(f);
@@ -34,19 +36,23 @@ public class AllureDefectAge {
             }
         }
 
+        // 3. Load history for Age and Date calculation
         File hf = new File("target/allure-results/history/history.json");
         JsonNode hr = hf.exists() ? mapper.readTree(hf) : null;
         DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
+        // 4. Write CSV
         try (PrintWriter w = new PrintWriter(new FileWriter(fileName))) {
             w.println("Class_Name,Test_Name,Defect_Age_Builds,First_Failed_Date,Error_Message");
             for (var entry : defects.entrySet()) {
                 int age = 1;
-                long firstFailTime = Long.parseLong(entry.getValue()[3]);
+                String[] dData = entry.getValue();
+                long firstFailTime = Long.parseLong(dData[3]);
 
                 if (hr != null && hr.has(entry.getKey())) {
                     List<JsonNode> items = new ArrayList<>();
                     hr.get(entry.getKey()).path("items").forEach(items::add);
+                    // Sort newest to oldest
                     items.sort((a, b) -> Long.compare(b.path("time").path("stop").asLong(0), a.path("time").path("stop").asLong(0)));
 
                     for (JsonNode item : items) {
@@ -58,9 +64,9 @@ public class AllureDefectAge {
                     }
                 }
                 String dateStr = LocalDateTime.ofInstant(Instant.ofEpochMilli(firstFailTime), ZoneId.systemDefault()).format(dtf);
-                String[] d = entry.getValue();
-                w.println(d[0] + "," + d[1] + "," + age + "," + dateStr + "," + d[2]);
+                w.println(dData[0] + "," + dData[1] + "," + age + "," + dateStr + "," + dData[2]);
             }
         }
+        System.out.println("✅ Defect Age Report generated: " + fileName);
     }
 }
