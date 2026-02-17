@@ -49,7 +49,7 @@ jobs:
         id: run
         continue-on-error: true
         run: |
-          xvfb-run --auto-servernum -- mvn test \
+          xvfb-run --auto-servernum -- mvn clean test \
           -Denv=${{ github.event.inputs.env || 'qa' }} \
           -Dbrowser=${{ github.event.inputs.browser || 'chromium' }} \
           -Dcucumber.filter.tags="@smoke"
