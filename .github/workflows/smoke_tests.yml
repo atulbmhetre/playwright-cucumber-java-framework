@@ -22,15 +22,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Main
-        uses: actions/checkout@v4
-
-      - name: Checkout gh-pages
-        uses: actions/checkout@v4
-        with:
-          ref: gh-pages
-          path: gh-pages
-        continue-on-error: true
+      - uses: actions/checkout@v4
 
       - uses: actions/setup-java@v4
         with:
@@ -40,13 +32,16 @@ jobs:
 
       - run: npm install -g allure-commandline && npx playwright install --with-deps
 
-      - name: Restore Smoke History
+      # Restore History
+      - name: Restore History
+        continue-on-error: true
         run: |
+          git fetch origin gh-pages || echo "No gh-pages yet"
+          git checkout origin/gh-pages -- smoke-report/history || echo "No history found"
           mkdir -p target/allure-results/history
-          if [ -d gh-pages/allure-history/smoke/history ]; then
-            cp -r gh-pages/allure-history/smoke/history/* target/allure-results/history/
-          fi
+          cp -r smoke-report/history/* target/allure-results/history/ 2>/dev/null || true
 
+      # Run Tests
       - name: Run Smoke Tests
         id: run
         continue-on-error: true
@@ -56,30 +51,40 @@ jobs:
           -Dbrowser=${{ github.event.inputs.browser || 'chromium' }} \
           -Dcucumber.filter.tags="@smoke"
 
-      - name: Generate Defect Age + Report
+      # Generate Environment + Defect Age + Report
+      - name: Generate Report
         if: always()
         run: |
+          mvn exec:java -Dexec.mainClass="com.samtech.qa.testutilities.AllureEnvironmentManager" -Dexec.classpathScope=test
           mvn exec:java -Dexec.mainClass="com.samtech.qa.testutilities.AllureDefectAge" -Dexec.classpathScope=test
           allure generate target/allure-results -o allure-report-smoke --clean
 
-      - name: Update gh-pages Content
+      # Prepare Build Folder
+      - name: Prepare Build Artifacts
         if: always()
         run: |
-          mkdir -p gh-pages/smoke-report
-          mkdir -p gh-pages/allure-history/smoke
+          mkdir -p build-${{ github.run_number }}
+          cp -r allure-report-smoke build-${{ github.run_number }}/allure-report
+          cp -r target/allure-results build-${{ github.run_number }}/allure-results
+          cp target/defect-age-report.csv build-${{ github.run_number }}/ || true
+          cp test-output/failedLocators_*.json build-${{ github.run_number }}/ || true
 
-          rm -rf gh-pages/smoke-report/*
-          cp -r allure-report-smoke/* gh-pages/smoke-report/
-          rm -rf gh-pages/allure-history/smoke/history
-          cp -r allure-report-smoke/history gh-pages/allure-history/smoke/
+      # Upload Artifacts
+      - name: Upload Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Smoke_Build_${{ github.run_number }}
+          path: build-${{ github.run_number }}
 
-      - name: Deploy to gh-pages
+      # Deploy to gh-pages
+      - name: Deploy Report
         if: always()
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: gh-pages
-          publish_branch: gh-pages
+          publish_dir: allure-report-smoke
+          destination_dir: smoke-report
           keep_files: true
 
       - name: Final Status
