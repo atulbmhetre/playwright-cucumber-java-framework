@@ -28,24 +28,19 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: 2. Setup Java & Node
+      - name: 2. Setup Environment
         uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
           cache: 'maven'
 
-      - name: 3. Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: 4. Install Tools
+      - name: 3. Install Tools
         run: |
           npx playwright install --with-deps
           npm install -g allure-commandline
 
-      - name: 5. Restore Smoke History
+      - name: 4. Restore Smoke History
         continue-on-error: true
         run: |
           git fetch origin gh-pages
@@ -53,7 +48,7 @@ jobs:
           mkdir -p target/allure-results/history
           cp -r smoke-report/history/* target/allure-results/history/ 2>/dev/null || true
 
-      - name: 6. Run Smoke Tests
+      - name: 5. Run Smoke Tests
         id: smoke_run
         continue-on-error: true
         run: |
@@ -62,27 +57,24 @@ jobs:
           -Dbrowser=${{ github.event.inputs.browser || 'chromium' }} \
           -Dcucumber.filter.tags="@smoke"
 
-      - name: 7. Generate Smoke Reports
+      - name: 6. Generate Smoke Reports
         if: always()
         run: |
           mvn exec:java -Dexec.mainClass="com.samtech.qa.testutilities.AllureDefectAge" -Dexec.classpathScope=test
           allure generate target/allure-results -o allure-report-smoke --clean
 
-      - name: 8. Archive & Deploy Smoke
-        if: always()
-        run: echo "Deploying Smoke Report..."
-
-      - name: 9. Upload Smoke Artifacts
+      - name: 7. Archive Smoke Data
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: Smoke_Full_Data
           path: |
             target/defect-age-report_*.csv
+            test-output/failedLocators_*.json
             target/allure-results
             allure-report-smoke
 
-      - name: 10. Deploy Smoke to GH Pages
+      - name: 8. Deploy Smoke to GH Pages
         if: always()
         uses: peaceiris/actions-gh-pages@v3
         with:
@@ -91,41 +83,39 @@ jobs:
           destination_dir: smoke-report
           keep_files: true
 
-      - name: 11. Smoke Status Check
+      - name: 9. Smoke Status Check
         if: always()
         run: |
           if [ "${{ steps.smoke_run.outcome }}" == "failure" ]; then
-            echo "Smoke tests failed. Build marked as failure."
             exit 1
           fi
 
   regression-tests:
     needs: smoke-tests
-    # Only run if smoke succeeded OR if manually triggered specifically for regression
     if: always() && (github.event.inputs.suite == 'regression' || needs.smoke-tests.result == 'success')
     runs-on: ubuntu-latest
     steps:
       - name: 1. Checkout Repository
         uses: actions/checkout@v4
 
-      - name: 2. Setup Java & Node
+      - name: 2. Setup Environment
         uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
           cache: 'maven'
 
-      - name: 3. Install Tools (Required for every job)
+      - name: 3. Install Tools (Essential for separate job)
         run: |
           npx playwright install --with-deps
           npm install -g allure-commandline
 
-      - name: 4. Restore Regression History
-        continue-on-error: true
+      - name: 4. Clean Ghost Results & Restore History
         run: |
+          rm -rf target/allure-results  # Kill any default folders
+          mkdir -p target/regression-results/history
           git fetch origin gh-pages
           git checkout origin/gh-pages -- regression-report/history || echo "No history"
-          mkdir -p target/regression-results/history
           cp -r regression-report/history/* target/regression-results/history/ 2>/dev/null || true
 
       - name: 5. Run Regression Tests
@@ -141,17 +131,19 @@ jobs:
       - name: 6. Generate Regression Report
         if: always()
         run: |
+          # Pass the specific directory to the Defect Age tool
           mvn exec:java -Dexec.mainClass="com.samtech.qa.testutilities.AllureDefectAge" \
             -Dexec.args="target/regression-results" -Dexec.classpathScope=test
           allure generate target/regression-results -o allure-report-regression --clean
 
-      - name: 7. Archive & Deploy Regression
+      - name: 7. Archive Regression Data
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: Regression_Full_Data
           path: |
             target/defect-age-report_*.csv
+            test-output/failedLocators_*.json
             target/regression-results
             allure-report-regression
 
