@@ -58,7 +58,6 @@ jobs:
       - name: Generate Allure Data
         if: always()
         run: |
-          mvn exec:java -Dexec.mainClass="com.samtech.qa.testutilities.AllureEnvironmentManager" -Dexec.classpathScope=test
           mvn exec:java -Dexec.mainClass="com.samtech.qa.testutilities.AllureDefectAge" -Dexec.classpathScope=test
           allure generate target/allure-results -o allure-report-smoke --clean
 
