@@ -1,0 +1,74 @@
+name: Regression Tests Execution
+
+on:
+  workflow_run:
+    workflows: ["Smoke Tests Execution"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      env:
+        description: "Environment"
+        required: true
+        default: "qa"
+        type: choice
+        options: [qa, dev, prod]
+
+jobs:
+  regression-job:
+    # Only run if Smoke succeeded OR if manually triggered
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { java-version: '21', distribution: 'temurin' }
+      - run: npm install -g allure-commandline && npx playwright install --with-deps
+
+      - name: Clean & Restore History
+        run: |
+          rm -rf target/allure-results
+          mkdir -p target/regression-results/history
+          git fetch origin gh-pages
+          git checkout origin/gh-pages -- regression-report/history || echo "No history"
+          cp -r regression-report/history/* target/regression-results/history/ 2>/dev/null || true
+
+      - name: Run Regression
+        id: run
+        continue-on-error: true
+        run: |
+          xvfb-run --auto-servernum -- mvn clean test \
+          -Dcucumber.filter.tags="@regression" \
+          -Dallure.results.directory=target/regression-results
+
+      - name: Generate Report
+        if: always()
+        run: |
+          # Physically move files just in case POM overrides results path
+          mkdir -p target/regression-results
+          mv target/allure-results/* target/regression-results/ 2>/dev/null || true
+          mvn exec:java -Dexec.mainClass="com.samtech.qa.testutilities.AllureDefectAge" -Dexec.args="target/regression-results" -Dexec.classpathScope=test
+          allure generate target/regression-results -o allure-report-regression --clean
+
+      - name: Archive
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Regression_Data_Build_${{ github.run_number }}
+          path: |
+            target/defect-age-report.csv
+            test-output/failedLocators_*.json
+            target/regression-results
+            allure-report-regression
+
+      - name: Deploy
+        if: always()
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: allure-report-regression
+          destination_dir: regression-report
+          keep_files: true
+
+      - name: Final Status
+        if: always()
+        run: exit ${{ steps.run.outcome == 'failure' && 1 || 0 }}

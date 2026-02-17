@@ -1,0 +1,70 @@
+name: Smoke Tests Execution
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      env:
+        description: "Environment"
+        required: true
+        default: "qa"
+        type: choice
+        options: [qa, dev, prod]
+      browser:
+        required: true
+        default: "chromium"
+        type: choice
+        options: [chromium, firefox, webkit]
+
+jobs:
+  smoke-job:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { java-version: '21', distribution: 'temurin', cache: 'maven' }
+      - run: npm install -g allure-commandline && npx playwright install --with-deps
+
+      - name: Restore History
+        continue-on-error: true
+        run: |
+          git fetch origin gh-pages
+          git checkout origin/gh-pages -- smoke-report/history || echo "No history"
+          mkdir -p target/allure-results/history
+          cp -r smoke-report/history/* target/allure-results/history/ 2>/dev/null || true
+
+      - name: Run Tests
+        id: run
+        continue-on-error: true
+        run: xvfb-run --auto-servernum -- mvn test -Denv=${{ github.event.inputs.env || 'qa' }} -Dbrowser=${{ github.event.inputs.browser || 'chromium' }} -Dcucumber.filter.tags="@smoke"
+
+      - name: Generate Report
+        if: always()
+        run: |
+          mvn exec:java -Dexec.mainClass="com.samtech.qa.testutilities.AllureDefectAge" -Dexec.classpathScope=test
+          allure generate target/allure-results -o allure-report-smoke --clean
+
+      - name: Archive
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Smoke_Data_Build_${{ github.run_number }}
+          path: |
+            target/defect-age-report.csv
+            test-output/failedLocators_*.json
+            target/allure-results
+            allure-report-smoke
+
+      - name: Deploy
+        if: always()
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: allure-report-smoke
+          destination_dir: smoke-report
+          keep_files: true
+
+      - name: Final Status
+        if: always()
+        run: exit ${{ steps.run.outcome == 'failure' && 1 || 0 }}

@@ -9,9 +9,13 @@ import java.util.*;
 
 public class AllureDefectAge {
     public static void main(String[] args) throws IOException {
+        // Step 1: Detect result path (handles POM-forced and custom folders)
         String path = (args.length > 0) ? args[0] : "target/allure-results";
         File folder = new File(path);
-        if (!folder.exists()) return;
+        if (!folder.exists()) {
+            System.out.println("Results directory not found at: " + path);
+            return;
+        }
 
         ObjectMapper mapper = new ObjectMapper();
         File[] files = folder.listFiles((d, n) -> n.endsWith("-result.json"));
@@ -31,11 +35,11 @@ public class AllureDefectAge {
             }
         }
 
+        // Step 2: Calculate Age from History
         File hf = new File(path + "/history/history.json");
         JsonNode hr = hf.exists() ? mapper.readTree(hf) : null;
         DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
-        // Keep filename static for consistent artifact zipping
         try (PrintWriter w = new PrintWriter(new FileWriter("target/defect-age-report.csv"))) {
             w.println("Class_Name,Test_Name,Defect_Age_Builds,First_Failed_Date,Error_Message");
             for (var entry : defects.entrySet()) {
@@ -58,12 +62,12 @@ public class AllureDefectAge {
             }
         }
 
-        // Inject info into Allure Environment widget
+        // Step 3: Inject Build Info into Allure UI
         Properties props = new Properties();
         props.setProperty("Build_Number", System.getenv("GITHUB_RUN_NUMBER") != null ? System.getenv("GITHUB_RUN_NUMBER") : "Local");
-        props.setProperty("Total_Defects", String.valueOf(defects.size()));
+        props.setProperty("Defects_Found", String.valueOf(defects.size()));
         try (FileOutputStream fos = new FileOutputStream(path + "/environment.properties")) {
-            props.store(fos, "Allure Env Info");
+            props.store(fos, "Allure Env");
         }
     }
 }
