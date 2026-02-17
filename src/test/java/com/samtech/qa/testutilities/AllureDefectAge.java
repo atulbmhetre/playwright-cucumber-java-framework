@@ -9,9 +9,9 @@ import java.util.*;
 
 public class AllureDefectAge {
     public static void main(String[] args) throws IOException {
-        // Use provided path or default to allure-results
-        String resultsPath = (args.length > 0) ? args[0] : "target/allure-results";
-        File folder = new File(resultsPath);
+        // Use argument if provided (e.g., target/regression-results)
+        String path = (args.length > 0) ? args[0] : "target/allure-results";
+        File folder = new File(path);
         if (!folder.exists()) return;
 
         String ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
@@ -35,7 +35,7 @@ public class AllureDefectAge {
             }
         }
 
-        File hf = new File(resultsPath + "/history/history.json");
+        File hf = new File(path + "/history/history.json");
         JsonNode hr = hf.exists() ? mapper.readTree(hf) : null;
         DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
@@ -56,8 +56,8 @@ public class AllureDefectAge {
                         } else break;
                     }
                 }
-                String dateStr = LocalDateTime.ofInstant(Instant.ofEpochMilli(firstFailTime), ZoneId.systemDefault()).format(dtf);
-                w.println(d[0] + "," + d[1] + "," + age + "," + dateStr + "," + d[2]);
+                String date = LocalDateTime.ofInstant(Instant.ofEpochMilli(firstFailTime), ZoneId.systemDefault()).format(dtf);
+                w.println(d[0] + "," + d[1] + "," + age + "," + date + "," + d[2]);
             }
         }
     }

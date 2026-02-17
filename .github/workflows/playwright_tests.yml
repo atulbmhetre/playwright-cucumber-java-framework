@@ -62,6 +62,23 @@ jobs:
           -Dbrowser=${{ github.event.inputs.browser || 'chromium' }} \
           -Dcucumber.filter.tags="@smoke"
 
+      - name: Debug Allure Regression Artifacts
+        run: |
+          echo "=== LIST regression-results ==="
+          ls -la target/regression-results || true
+          echo "=== SHOW history.json presence ==="
+          if [ -f target/regression-results/history/history.json ]; then
+            jq 'keys' target/regression-results/history/history.json || true
+            jq '.["97ce79cb5625043b47f948381fcef0be"]' target/regression-results/history/history.json || true
+          else
+            echo "history.json not found"
+          fi
+          echo "=== TAIL defect-age CSV ==="
+          ls -1 target/defect-age-report_*.csv 2>/dev/null || true
+          tail -n 5 target/defect-age-report_*.csv 2>/dev/null || true
+          echo "=== RUN allure generate (capture last 50 lines) ==="
+          allure generate target/regression-results -o allure-report-regression --clean 2>&1 | tail -n 50 || true          
+
       - name: 7. Generate Smoke Reports
         if: always()
         run: |
@@ -168,6 +185,24 @@ jobs:
           
           # 3. Generate Allure from the NEW folder
           allure generate target/regression-results -o allure-report-regression --clean
+
+      - name: Debug Allure Regression Artifacts
+        run: |
+          echo "=== LIST regression-results ==="
+          ls -la target/regression-results || true
+          echo "=== SHOW history.json presence ==="
+          if [ -f target/regression-results/history/history.json ]; then
+            jq 'keys' target/regression-results/history/history.json || true
+            jq '.["97ce79cb5625043b47f948381fcef0be"]' target/regression-results/history/history.json || true
+          else
+            echo "history.json not found"
+          fi
+          echo "=== TAIL defect-age CSV ==="
+          ls -1 target/defect-age-report_*.csv 2>/dev/null || true
+          tail -n 5 target/defect-age-report_*.csv 2>/dev/null || true
+          echo "=== RUN allure generate (capture last 50 lines) ==="
+          allure generate target/regression-results -o allure-report-regression --clean 2>&1 | tail -n 50 || true
+
 
       - name: 9. Detect Latest Locator JSON
         if: always()
