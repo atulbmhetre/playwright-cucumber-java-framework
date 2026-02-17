@@ -9,25 +9,23 @@ import java.util.*;
 
 public class AllureDefectAge {
     public static void main(String[] args) throws IOException {
+        // Step 1: Set Results Path (Default or Argument)
         String path = (args.length > 0) ? args[0] : "target/allure-results";
         File folder = new File(path);
         if (!folder.exists()) {
-            System.out.println("Path not found: " + path);
+            System.out.println("No allure results found at: " + path);
             return;
         }
-
-        String ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
-        String fileName = "target/defect-age-report_" + ts + ".csv";
 
         ObjectMapper mapper = new ObjectMapper();
         File[] files = folder.listFiles((d, n) -> n.endsWith("-result.json"));
         if (files == null) return;
 
+        // Step 2: Extract current failures
         Map<String, String[]> defects = new HashMap<>();
         for (File f : files) {
             JsonNode r = mapper.readTree(f);
-            String status = r.path("status").asText("");
-            if (status.matches("failed|broken")) {
+            if (r.path("status").asText("").matches("failed|broken")) {
                 String id = r.path("historyId").asText("unknown");
                 defects.put(id, new String[]{
                         r.path("fullName").asText("N/A"),
@@ -38,27 +36,29 @@ public class AllureDefectAge {
             }
         }
 
+        // Step 3: Compare with History
         File hf = new File(path + "/history/history.json");
         JsonNode hr = hf.exists() ? mapper.readTree(hf) : null;
         DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
-        try (PrintWriter w = new PrintWriter(new FileWriter(fileName))) {
+        String ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+        String csvName = "target/defect-age-report_" + ts + ".csv";
+
+        try (PrintWriter w = new PrintWriter(new FileWriter(csvName))) {
             w.println("Class_Name,Test_Name,Defect_Age_Builds,First_Failed_Date,Error_Message");
             for (var entry : defects.entrySet()) {
                 int age = 1;
                 String[] d = entry.getValue();
                 long firstFailTime = Long.parseLong(d[3]);
+
                 if (hr != null && hr.has(entry.getKey())) {
-                    JsonNode historyItem = hr.get(entry.getKey());
-                    // Allure history items are in 'items' array
-                    if (historyItem.has("items")) {
-                        for (JsonNode item : historyItem.get("items")) {
+                    JsonNode historyNode = hr.get(entry.getKey());
+                    if (historyNode.has("items")) {
+                        for (JsonNode item : historyNode.get("items")) {
                             if (item.path("status").asText("").matches("failed|broken")) {
                                 age++;
                                 firstFailTime = item.path("time").path("start").asLong(firstFailTime);
-                            } else {
-                                break;
-                            }
+                            } else break;
                         }
                     }
                 }
@@ -67,14 +67,13 @@ public class AllureDefectAge {
             }
         }
 
-        // AUTO-INJECT INTO ALLURE DASHBOARD
+        // Step 4: Inject into Allure Environment UI
         Properties props = new Properties();
-        props.setProperty("Total_Defects", String.valueOf(defects.size()));
-        props.setProperty("Last_Run_Timestamp", ts);
+        props.setProperty("Total_Defects_Found", String.valueOf(defects.size()));
+        props.setProperty("Last_Run_Time", ts);
         try (FileOutputStream fos = new FileOutputStream(path + "/environment.properties")) {
-            props.store(fos, "Allure Environment");
+            props.store(fos, "Allure Dashboard Data");
         }
-
-        System.out.println("Defect Age Report Generated: " + fileName);
+        System.out.println("Successfully generated Defect Age report and environment properties.");
     }
 }
