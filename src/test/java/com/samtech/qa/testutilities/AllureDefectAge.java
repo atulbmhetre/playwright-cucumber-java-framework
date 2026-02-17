@@ -35,7 +35,7 @@ public class AllureDefectAge {
         JsonNode hr = hf.exists() ? mapper.readTree(hf) : null;
         DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
-        String ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+        // Keep filename static for consistent artifact zipping
         try (PrintWriter w = new PrintWriter(new FileWriter("target/defect-age-report.csv"))) {
             w.println("Class_Name,Test_Name,Defect_Age_Builds,First_Failed_Date,Error_Message");
             for (var entry : defects.entrySet()) {
@@ -44,11 +44,13 @@ public class AllureDefectAge {
                 long firstFailTime = Long.parseLong(d[3]);
                 if (hr != null && hr.has(entry.getKey())) {
                     JsonNode items = hr.get(entry.getKey()).path("items");
-                    for (JsonNode item : items) {
-                        if (item.path("status").asText("").matches("failed|broken")) {
-                            age++;
-                            firstFailTime = item.path("time").path("start").asLong(firstFailTime);
-                        } else break;
+                    if (items != null) {
+                        for (JsonNode item : items) {
+                            if (item.path("status").asText("").matches("failed|broken")) {
+                                age++;
+                                firstFailTime = item.path("time").path("start").asLong(firstFailTime);
+                            } else break;
+                        }
                     }
                 }
                 String date = LocalDateTime.ofInstant(Instant.ofEpochMilli(firstFailTime), ZoneId.systemDefault()).format(dtf);
@@ -56,12 +58,12 @@ public class AllureDefectAge {
             }
         }
 
-        // Dashboard Injector
+        // Inject info into Allure Environment widget
         Properties props = new Properties();
-        props.setProperty("Defects_Count", String.valueOf(defects.size()));
-        props.setProperty("Execution_Time", ts);
+        props.setProperty("Build_Number", System.getenv("GITHUB_RUN_NUMBER") != null ? System.getenv("GITHUB_RUN_NUMBER") : "Local");
+        props.setProperty("Total_Defects", String.valueOf(defects.size()));
         try (FileOutputStream fos = new FileOutputStream(path + "/environment.properties")) {
-            props.store(fos, "Allure Env");
+            props.store(fos, "Allure Env Info");
         }
     }
 }

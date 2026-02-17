@@ -11,6 +11,16 @@ on:
         default: "smoke"
         type: choice
         options: [smoke, regression]
+      env:
+        required: true
+        default: "qa"
+        type: choice
+        options: [qa, dev, prod]
+      browser:
+        required: true
+        default: "chromium"
+        type: choice
+        options: [chromium, firefox, webkit]
 
 jobs:
   smoke-tests:
@@ -30,10 +40,14 @@ jobs:
           mkdir -p target/allure-results/history
           cp -r smoke-report/history/* target/allure-results/history/ 2>/dev/null || true
 
-      - name: Run Smoke
+      - name: Run Smoke Tests
         id: smoke_run
         continue-on-error: true
-        run: xvfb-run --auto-servernum -- mvn test -Dcucumber.filter.tags="@smoke"
+        run: |
+          xvfb-run --auto-servernum -- mvn test \
+          -Denv=${{ github.event.inputs.env || 'qa' }} \
+          -Dbrowser=${{ github.event.inputs.browser || 'chromium' }} \
+          -Dcucumber.filter.tags="@smoke"
 
       - name: Generate Smoke Report
         if: always()
@@ -41,14 +55,15 @@ jobs:
           mvn exec:java -Dexec.mainClass="com.samtech.qa.testutilities.AllureDefectAge" -Dexec.args="target/allure-results" -Dexec.classpathScope=test
           allure generate target/allure-results -o allure-report-smoke --clean
 
-      - name: Archive Smoke
+      - name: Archive Smoke Data
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Smoke_Artifacts
+          name: Smoke_Data_Build_${{ github.run_number }}
           path: |
             target/defect-age-report.csv
             test-output/failedLocators_*.json
+            target/allure-results
             allure-report-smoke
 
       - name: Deploy Smoke
@@ -60,13 +75,13 @@ jobs:
           destination_dir: smoke-report
           keep_files: true
 
-      - name: Fail Build if Smoke Failed
+      - name: Status Check
         if: always()
         run: exit ${{ steps.smoke_run.outcome == 'failure' && 1 || 0 }}
 
   regression-tests:
     needs: smoke-tests
-    if: always() && (github.event.inputs.suite == 'regression' || needs.smoke-tests.result == 'success')
+    if: always() && (github.event.inputs.suite == 'regression' || (github.event_name == 'push' && needs.smoke-tests.result == 'success'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -76,34 +91,47 @@ jobs:
 
       - name: Clean & Restore Regression History
         run: |
-          rm -rf target/allure-results  # FORCE DELETE GHOSTS
+          rm -rf target/allure-results
           mkdir -p target/regression-results/history
           git fetch origin gh-pages
           git checkout origin/gh-pages -- regression-report/history || echo "No history"
           cp -r regression-report/history/* target/regression-results/history/ 2>/dev/null || true
 
-      - name: Run Regression
+      - name: Run Regression Tests
         id: reg_run
         continue-on-error: true
-        run: xvfb-run --auto-servernum -- mvn clean test -Dcucumber.filter.tags="@regression" -Dallure.results.directory=target/regression-results
+        run: |
+          xvfb-run --auto-servernum -- mvn clean test \
+            -Denv=${{ github.event.inputs.env || 'qa' }} \
+            -Dbrowser=${{ github.event.inputs.browser || 'chromium' }} \
+            -Dcucumber.filter.tags="@regression"
+
+      - name: Isolate Regression Results (Bypass POM)
+        if: always()
+        run: |
+          mkdir -p target/regression-results
+          mv target/allure-results/* target/regression-results/ 2>/dev/null || true
+          rm -rf target/allure-results
 
       - name: Generate Regression Report
         if: always()
         run: |
-          mvn exec:java -Dexec.mainClass="com.samtech.qa.testutilities.AllureDefectAge" -Dexec.args="target/regression-results" -Dexec.classpathScope=test
+          mvn exec:java -Dexec.mainClass="com.samtech.qa.testutilities.AllureDefectAge" \
+            -Dexec.args="target/regression-results" -Dexec.classpathScope=test
           allure generate target/regression-results -o allure-report-regression --clean
 
-      - name: Archive Regression
+      - name: Archive Regression Data
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Regression_Artifacts
+          name: Regression_Data_Build_${{ github.run_number }}
           path: |
             target/defect-age-report.csv
             test-output/failedLocators_*.json
+            target/regression-results
             allure-report-regression
 
-      - name: Deploy Regression
+      - name: Publish Regression
         if: always()
         uses: peaceiris/actions-gh-pages@v3
         with:
@@ -112,6 +140,6 @@ jobs:
           destination_dir: regression-report
           keep_files: true
 
-      - name: Fail Build if Regression Failed
+      - name: Status Check
         if: always()
         run: exit ${{ steps.reg_run.outcome == 'failure' && 1 || 0 }}
