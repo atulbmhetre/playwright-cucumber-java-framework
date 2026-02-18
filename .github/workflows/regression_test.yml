@@ -35,6 +35,21 @@ jobs:
 
     steps:
       # ─────────────────────────────────────────
+      # 0️⃣  Guard — exit immediately if smoke failed
+      #      Reliable fix for GitHub's workflow_run
+      #      conclusion check quirk
+      # ─────────────────────────────────────────
+      - name: Check Smoke Conclusion
+        run: |
+          CONCLUSION="${{ github.event.workflow_run.conclusion }}"
+          echo "Smoke workflow conclusion: ${CONCLUSION}"
+          if [ "${{ github.event_name }}" = "workflow_run" ] && [ "${CONCLUSION}" != "success" ]; then
+            echo "❌ Smoke did not pass (conclusion: ${CONCLUSION}) — skipping regression"
+            exit 1
+          fi
+          echo "✅ Smoke passed — proceeding with regression"
+
+      # ─────────────────────────────────────────
       # 1️⃣  Checkout main branch
       # ─────────────────────────────────────────
       - name: Checkout Main

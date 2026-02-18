@@ -158,6 +158,8 @@ jobs:
             mkdir gh-pages-push
             cd gh-pages-push
             git init
+            git config user.name  "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
             git remote add origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
             git checkout --orphan gh-pages
             git commit --allow-empty -m "chore: init gh-pages [skip ci]"
