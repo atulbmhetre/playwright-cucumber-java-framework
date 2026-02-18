@@ -1,6 +1,10 @@
 name: Regression Tests Execution
 
 on:
+  workflow_run:
+    workflows: ["Smoke Tests Execution"]
+    types:
+      - completed
   workflow_dispatch:
     inputs:
       env:
@@ -22,6 +26,10 @@ on:
 jobs:
   regression-job:
     runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success')
 
     steps:
       # ─────────────────────────────────────────
@@ -46,15 +54,13 @@ jobs:
         run: npm install -g allure-commandline
 
       # ─────────────────────────────────────────
-      # 4️⃣  Install Playwright browsers for Java
-      #      The Java Playwright lib manages its own
-      #      browser binaries — must install via mvn
+      # 4️⃣  Install Playwright browsers via Java CLI
       # ─────────────────────────────────────────
       - name: Install Playwright Browsers
         run: mvn exec:java -e -D exec.mainClass=com.microsoft.playwright.CLI -D exec.args="install --with-deps" -D exec.classpathScope=test
 
       # ─────────────────────────────────────────
-      # 5️⃣  Restore Allure history from gh-pages
+      # 5️⃣  Restore shared history from gh-pages
       # ─────────────────────────────────────────
       - name: Checkout gh-pages for History
         uses: actions/checkout@v4
@@ -63,59 +69,68 @@ jobs:
           path: gh-pages
         continue-on-error: true
 
-      - name: Restore Regression History
+      - name: Restore Shared History
         run: |
           rm -rf target/allure-results
           mkdir -p target/allure-results/history
-          if [ -d gh-pages/allure-history/regression/history ]; then
-            echo "✅ Prior regression history found — restoring"
-            cp -r gh-pages/allure-history/regression/history/. target/allure-results/history/
+          if [ -d gh-pages/allure-history/shared/history ]; then
+            echo "✅ Shared history found — restoring"
+            cp -r gh-pages/allure-history/shared/history/. target/allure-results/history/
           else
-            echo "ℹ️  No prior regression history — first run"
+            echo "ℹ️  No shared history yet — first run"
           fi
 
       # ─────────────────────────────────────────
-      # 6️⃣  Run Regression Tests
-      #      continue-on-error: true — regression is
-      #      non-blocking by policy
+      # 6️⃣  Resolve build number
+      #      When auto-triggered: use smoke's run number
+      #      so regression pairs with the right smoke build
+      #      When manual: use own run number
+      # ─────────────────────────────────────────
+      - name: Resolve Build Number
+        id: build
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            echo "number=${{ github.event.workflow_run.run_number }}" >> $GITHUB_OUTPUT
+          else
+            echo "number=${{ github.run_number }}" >> $GITHUB_OUTPUT
+          fi
+
+      # ─────────────────────────────────────────
+      # 7️⃣  Run Regression Tests
       # ─────────────────────────────────────────
       - name: Run Regression Tests
         id: run
         continue-on-error: true
         run: |
           xvfb-run --auto-servernum -- mvn clean test \
+            -Dtestng.suite.file=src/test/resources/testng-regression.xml \
             -Dcucumber.filter.tags="${{ github.event.inputs.tag || '@regression' }}" \
             -Denv="${{ github.event.inputs.env || 'qa' }}" \
             -Dbrowser="${{ github.event.inputs.browser || 'chromium' }}" \
             -Dheadless="${{ github.event.inputs.headless || 'true' }}" \
-            -Dthreadcount="${{ github.event.inputs.threadcount || '1' }}" \
             -Dparallel.thread.count="${{ github.event.inputs.threadcount || '1' }}" \
-            -Dallure.results.directory=target/allure-results \
-            -Dsurefire.systemPropertyVariables.env="${{ github.event.inputs.env || 'qa' }}" \
-            -Dsurefire.systemPropertyVariables.browser="${{ github.event.inputs.browser || 'chromium' }}" \
-            -Dsurefire.systemPropertyVariables.headless="${{ github.event.inputs.headless || 'true' }}" \
-            -Dsurefire.systemPropertyVariables.cucumber.filter.tags="${{ github.event.inputs.tag || '@regression' }}"
+            -Dallure.results.directory=target/allure-results
 
       # ─────────────────────────────────────────
-      # 7️⃣  Debug — verify outputs after test run
-      #      Remove this step after first clean run
+      # 8️⃣  Debug — verify outputs
+      #      Remove after first confirmed clean run
       # ─────────────────────────────────────────
       - name: Debug — Verify Output Paths
         if: always()
         run: |
           echo "====== target/allure-results ======"
           ls -la target/allure-results/ || echo "❌ NOT FOUND"
+          echo "====== history ======"
+          ls -la target/allure-results/history/ || echo "❌ history empty or missing"
           echo "====== environment.properties ======"
           cat target/allure-results/environment.properties || echo "❌ NOT FOUND"
           echo "====== test-output ======"
-          find . -path ./gh-pages -prune -o -name "failedLocators_*.json" -print || echo "❌ no failedLocators found"
+          find . -path ./gh-pages -prune -o -name "failedLocators_*.json" -print
           echo "====== defect-age-report ======"
-          find . -path ./gh-pages -prune -o -name "defect-age-report.csv" -print || echo "❌ not found"
-          echo "====== surefire-reports ======"
-          ls target/surefire-reports/ || echo "❌ NOT FOUND"
+          find . -path ./gh-pages -prune -o -name "defect-age-report.csv" -print
 
       # ─────────────────────────────────────────
-      # 8️⃣  Generate Defect Age Report
+      # 9️⃣  Generate Defect Age Report
       # ─────────────────────────────────────────
       - name: Generate Defect Age Report
         if: always()
@@ -127,66 +142,77 @@ jobs:
             -Dbrowser="${{ github.event.inputs.browser || 'chromium' }}" \
             -Dheadless="${{ github.event.inputs.headless || 'true' }}"
           echo "====== defect-age-report.csv ======"
-          cat target/defect-age-report.csv || echo "❌ NOT generated"
+          cat target/defect-age-report.csv || echo "❌ not generated"
 
       # ─────────────────────────────────────────
-      # 9️⃣  Generate Allure HTML Report
+      # 🔟  Generate Allure HTML Report
       # ─────────────────────────────────────────
       - name: Generate Allure Report
         if: always()
         run: |
           allure generate target/allure-results -o allure-report-regression --clean
           echo "====== allure-report-regression/history ======"
-          ls allure-report-regression/history/ || echo "❌ history missing from report"
+          ls allure-report-regression/history/ || echo "❌ history missing"
 
       # ─────────────────────────────────────────
-      # 🔟  Save Regression History to gh-pages FIRST
-      #      Do this BEFORE peaceiris deploy to avoid
-      #      racing two simultaneous gh-pages writes
+      # 1️⃣1️⃣  Save shared history + versioned report
+      #        + update index page + cleanup old builds
       # ─────────────────────────────────────────
-      - name: Save Regression History to gh-pages
+      - name: Update gh-pages — History + Versioned Report + Index
         if: always()
         run: |
+          BUILD=${{ steps.build.outputs.number }}
+          REPO_URL="https://${{ github.repository_owner }}.github.io/$(echo '${{ github.repository }}' | cut -d'/' -f2)"
+          MAX_BUILDS=20
+
+          # ── Clone gh-pages ──
           rm -rf gh-pages
           git clone --branch gh-pages --single-branch \
             https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git \
-            gh-pages || (mkdir -p gh-pages && cd gh-pages && git init && git remote add origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git)
-          mkdir -p gh-pages/allure-history/regression
-          rm -rf gh-pages/allure-history/regression/history
-          cp -r allure-report-regression/history gh-pages/allure-history/regression/history
+            gh-pages || mkdir -p gh-pages
+
           cd gh-pages
+
+          # ── Save shared history ──
+          mkdir -p allure-history/shared
+          rm -rf allure-history/shared/history
+          cp -r ../allure-report-regression/history allure-history/shared/history
+
+          # ── Save versioned regression report ──
+          mkdir -p regression-report/build-${BUILD}
+          cp -r ../allure-report-regression/. regression-report/build-${BUILD}/
+
+          # ── Write build metadata for index page ──
+          mkdir -p build-meta
+          echo "${{ steps.run.outcome }}" > build-meta/regression-${BUILD}.txt
+
+          # ── Cleanup old builds (keep last MAX_BUILDS) ──
+          cd regression-report
+          ls -d build-* 2>/dev/null | sort -t- -k2 -n | head -n -${MAX_BUILDS} | xargs rm -rf
+          cd ..
+
+          # ── Commit and push ──
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add allure-history/regression/history
+          git add .
           git diff --cached --quiet \
-            && echo "ℹ️  No history changes" \
-            || git commit -m "chore(regression): update allure history [skip ci]"
+            && echo "ℹ️  No changes to commit" \
+            || git commit -m "chore(regression): build #${BUILD} report + history [skip ci]"
           git push origin gh-pages
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # ─────────────────────────────────────────
-      # 1️⃣1️⃣  Deploy Regression Report to GitHub Pages
-      #      keep_files: true preserves smoke-report
-      # ─────────────────────────────────────────
-      - name: Deploy Regression Report to GitHub Pages
-        if: always()
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./allure-report-regression
-          destination_dir: regression-report
-          keep_files: true
-
-      # ─────────────────────────────────────────
-      # 1️⃣2️⃣  Upload ALL four artifacts
+      # 1️⃣2️⃣  Upload artifacts
+      #        Paired with smoke build number when auto-triggered
       # ─────────────────────────────────────────
       - name: Upload Regression Artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: regression-artifacts
+          name: regression-artifacts-build-${{ steps.build.outputs.number }}
           if-no-files-found: warn
+          retention-days: 30
           path: |
             target/allure-results/
             allure-report-regression/
@@ -195,8 +221,6 @@ jobs:
 
       # ─────────────────────────────────────────
       # 1️⃣3️⃣  Report outcome — non-blocking
-      #         Regression failures are visible but
-      #         do not block the pipeline
       # ─────────────────────────────────────────
       - name: Report Regression Outcome
         if: always()

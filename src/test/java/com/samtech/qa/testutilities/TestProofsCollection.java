@@ -2,7 +2,6 @@ package com.samtech.qa.testutilities;
 
 import com.microsoft.playwright.Page;
 import com.samtech.qa.contexts.TestContext;
-import com.samtech.qa.runners.TestRunner;
 import com.samtech.qa.utils.ConfigLoader;
 import io.qameta.allure.Allure;
 import org.slf4j.Logger;

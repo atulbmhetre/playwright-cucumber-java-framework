@@ -8,13 +8,12 @@ import io.cucumber.testng.CucumberOptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testng.annotations.AfterSuite;
-import org.testng.annotations.BeforeClass;
 import org.testng.annotations.BeforeSuite;
 import org.testng.annotations.DataProvider;
 
 @CucumberOptions(features = "src/test/resources/features",
         glue = {"com.samtech.qa.stepdefinitions", "com.samtech.qa.hooks"},
-        tags = "@abcd",
+        tags = "@regression",
         plugin = {
                 "pretty",
                 "io.qameta.allure.cucumber7jvm.AllureCucumber7Jvm",
@@ -24,9 +23,9 @@ import org.testng.annotations.DataProvider;
         },
         dryRun = false,
         monochrome = true)
-public class TestRunner extends AbstractTestNGCucumberTests {
+public class RegressionTestsRunner extends AbstractTestNGCucumberTests {
 
-    private static final Logger logger = LoggerFactory.getLogger(TestRunner.class);
+    private static final Logger logger = LoggerFactory.getLogger(RegressionTestsRunner.class);
 
     @Override
     @DataProvider(parallel = true)

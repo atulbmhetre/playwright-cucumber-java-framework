@@ -2,7 +2,7 @@
 <suite name="OrangeHRM Suite">
     <test name="Regression Tests">
         <classes>
-            <class name="com.samtech.qa.runners.TestRunner"/>
+            <class name="com.samtech.qa.runners.RegressionTestsRunner"/>
         </classes>
     </test>
     <test name="Retry Failed Tests">
