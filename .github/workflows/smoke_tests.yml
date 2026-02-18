@@ -76,13 +76,15 @@ jobs:
 
       # ─────────────────────────────────────────
       # 6️⃣  Run Smoke Tests
+      #      FIX: pass only filename, pom.xml already
+      #      has src/test/resources/ as prefix via property
       # ─────────────────────────────────────────
       - name: Run Smoke Tests
         id: run
         continue-on-error: true
         run: |
           xvfb-run --auto-servernum -- mvn clean test \
-            -Dtestng.suite.file=src/test/resources/testng-smoke.xml \
+            -Dtestng.suite.file=testng-smoke.xml \
             -Dcucumber.filter.tags="${{ github.event.inputs.tag || '@smoke' }}" \
             -Denv="${{ github.event.inputs.env || 'qa' }}" \
             -Dbrowser="${{ github.event.inputs.browser || 'chromium' }}" \
@@ -134,23 +136,36 @@ jobs:
           ls allure-report-smoke/history/ || echo "❌ history missing"
 
       # ─────────────────────────────────────────
-      # 🔟  Save shared history + versioned report
-      #      + update index page + cleanup old builds
+      # 🔟  Save history + versioned report + index
+      #      FIX: create gh-pages branch if it doesn't exist
       # ─────────────────────────────────────────
       - name: Update gh-pages — History + Versioned Report + Index
         if: always()
         run: |
           BUILD=${{ github.run_number }}
-          REPO_URL="https://${{ github.repository_owner }}.github.io/$(echo '${{ github.repository }}' | cut -d'/' -f2)"
+          REPO_NAME=$(echo '${{ github.repository }}' | cut -d'/' -f2)
+          REPO_URL="https://${{ github.repository_owner }}.github.io/${REPO_NAME}"
           MAX_BUILDS=20
 
-          # ── Clone gh-pages ──
-          rm -rf gh-pages
-          git clone --branch gh-pages --single-branch \
+          # ── Clone gh-pages or create it fresh if it doesn't exist ──
+          rm -rf gh-pages-push
+          if git clone --branch gh-pages --single-branch \
             https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git \
-            gh-pages || mkdir -p gh-pages
+            gh-pages-push 2>/dev/null; then
+            echo "✅ gh-pages branch cloned"
+          else
+            echo "ℹ️  gh-pages branch does not exist — creating fresh"
+            mkdir gh-pages-push
+            cd gh-pages-push
+            git init
+            git remote add origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+            git checkout --orphan gh-pages
+            git commit --allow-empty -m "chore: init gh-pages [skip ci]"
+            git push origin gh-pages
+            cd ..
+          fi
 
-          cd gh-pages
+          cd gh-pages-push
 
           # ── Save shared history ──
           mkdir -p allure-history/shared
@@ -161,13 +176,13 @@ jobs:
           mkdir -p smoke-report/build-${BUILD}
           cp -r ../allure-report-smoke/. smoke-report/build-${BUILD}/
 
-          # ── Write build metadata for index page ──
+          # ── Write build metadata ──
           mkdir -p build-meta
           echo "${{ steps.run.outcome }}" > build-meta/smoke-${BUILD}.txt
 
-          # ── Cleanup old builds (keep last MAX_BUILDS) ──
+          # ── Cleanup old smoke builds (keep last MAX_BUILDS) ──
           cd smoke-report
-          ls -d build-* 2>/dev/null | sort -t- -k2 -n | head -n -${MAX_BUILDS} | xargs rm -rf
+          ls -d build-* 2>/dev/null | sort -t- -k2 -n | head -n -${MAX_BUILDS} | xargs rm -rf 2>/dev/null || true
           cd ..
 
           # ── Generate unified index page ──
@@ -179,10 +194,11 @@ jobs:
             <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
             <title>Test Reports Dashboard</title>
             <style>
-              body { font-family: Arial, sans-serif; margin: 0; background: #f5f5f5; }
+              * { box-sizing: border-box; margin: 0; padding: 0; }
+              body { font-family: Arial, sans-serif; background: #f5f5f5; }
               header { background: #2c3e50; color: white; padding: 20px 40px; }
-              header h1 { margin: 0; font-size: 24px; }
-              header p { margin: 4px 0 0; opacity: 0.7; font-size: 13px; }
+              header h1 { font-size: 22px; }
+              header p { margin-top: 4px; opacity: 0.7; font-size: 12px; }
               .container { max-width: 1100px; margin: 30px auto; padding: 0 20px; }
               table { width: 100%; border-collapse: collapse; background: white;
                       border-radius: 8px; overflow: hidden;
@@ -200,6 +216,7 @@ jobs:
               a { color: #2980b9; text-decoration: none; font-weight: 500; }
               a:hover { text-decoration: underline; }
               .na { color: #aaa; font-style: italic; }
+              #loading { text-align: center; padding: 40px; color: #aaa; }
             </style>
           </head>
           <body>
@@ -219,69 +236,56 @@ jobs:
                   </tr>
                 </thead>
                 <tbody id="tbody">
+                  <tr><td colspan="5" id="loading">Loading builds...</td></tr>
                 </tbody>
               </table>
             </div>
             <script>
               const repoUrl = "REPO_URL_PLACEHOLDER";
+              async function safeFetch(url) {
+                try {
+                  const r = await fetch(url);
+                  if (!r.ok) return null;
+                  return (await r.text()).trim();
+                } catch { return null; }
+              }
               async function loadBuilds() {
                 const tbody = document.getElementById("tbody");
-                const builds = [];
-
-                // Discover builds from known range (last 100 possible)
-                const checks = [];
-                for (let i = 1; i <= 200; i++) checks.push(i);
-
-                const results = await Promise.allSettled(
-                  checks.map(n =>
-                    fetch(`${repoUrl}/build-meta/smoke-${n}.txt`, {method:'HEAD'})
-                      .then(r => r.ok ? n : null)
-                      .catch(() => null)
-                  )
+                const rows = [];
+                const checks = Array.from({length: 200}, (_, i) => i + 1);
+                const results = await Promise.all(
+                  checks.map(n => safeFetch(`${repoUrl}/build-meta/smoke-${n}.txt`).then(v => v !== null ? n : null))
                 );
-
-                const found = results
-                  .map(r => r.value)
-                  .filter(n => n !== null)
-                  .sort((a,b) => b - a)
-                  .slice(0, 20);
-
+                const found = results.filter(n => n !== null).sort((a,b) => b-a).slice(0,20);
                 if (found.length === 0) {
-                  tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#aaa">No builds found yet</td></tr>';
+                  tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#aaa;padding:30px">No builds found yet</td></tr>';
                   return;
                 }
-
+                tbody.innerHTML = "";
                 for (const build of found) {
-                  const smokeStatus = await fetch(`${repoUrl}/build-meta/smoke-${build}.txt`)
-                    .then(r => r.text()).then(t => t.trim()).catch(() => 'unknown');
-                  const regressionStatus = await fetch(`${repoUrl}/build-meta/regression-${build}.txt`)
-                    .then(r => r.text()).then(t => t.trim()).catch(() => null);
-
+                  const smokeStatus = await safeFetch(`${repoUrl}/build-meta/smoke-${build}.txt`);
+                  const regressionStatus = await safeFetch(`${repoUrl}/build-meta/regression-${build}.txt`);
                   const smokeBadge = smokeStatus === 'success'
-                    ? '<span class="badge pass">PASSED</span>'
+                    ? '<span class="badge pass">✅ PASSED</span>'
                     : smokeStatus === 'failure'
-                    ? '<span class="badge fail">FAILED</span>'
+                    ? '<span class="badge fail">❌ FAILED</span>'
                     : '<span class="badge pending">UNKNOWN</span>';
-
                   const regressionBadge = regressionStatus === null
-                    ? '<span class="na">Not run</span>'
+                    ? '<span class="na">Not triggered</span>'
                     : regressionStatus === 'success'
-                    ? '<span class="badge pass">PASSED</span>'
-                    : '<span class="badge fail">FAILED</span>';
-
+                    ? '<span class="badge pass">✅ PASSED</span>'
+                    : '<span class="badge fail">❌ FAILED</span>';
                   const smokeLink = `<a href="${repoUrl}/smoke-report/build-${build}/index.html" target="_blank">View Report</a>`;
                   const regressionLink = regressionStatus === null
                     ? '<span class="na">—</span>'
                     : `<a href="${repoUrl}/regression-report/build-${build}/index.html" target="_blank">View Report</a>`;
-
-                  tbody.innerHTML += `
-                    <tr>
-                      <td><strong>#${build}</strong></td>
-                      <td>${smokeBadge}</td>
-                      <td>${smokeLink}</td>
-                      <td>${regressionBadge}</td>
-                      <td>${regressionLink}</td>
-                    </tr>`;
+                  tbody.innerHTML += `<tr>
+                    <td><strong>#${build}</strong></td>
+                    <td>${smokeBadge}</td>
+                    <td>${smokeLink}</td>
+                    <td>${regressionBadge}</td>
+                    <td>${regressionLink}</td>
+                  </tr>`;
                 }
               }
               loadBuilds();
@@ -290,16 +294,15 @@ jobs:
           </html>
           HTMLEOF
 
-          # ── Inject correct repo URL into index page ──
           sed -i "s|REPO_URL_PLACEHOLDER|${REPO_URL}|g" index.html
 
-          # ── Commit and push everything ──
+          # ── Commit and push ──
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add .
           git diff --cached --quiet \
             && echo "ℹ️  No changes to commit" \
-            || git commit -m "chore(smoke): build #${BUILD} report + history [skip ci]"
+            || git commit -m "chore(smoke): build #${BUILD} [skip ci]"
           git push origin gh-pages
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

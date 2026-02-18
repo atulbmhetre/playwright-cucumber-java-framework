@@ -26,6 +26,8 @@ on:
 jobs:
   regression-job:
     runs-on: ubuntu-latest
+    # FIX: explicit conclusion check prevents regression
+    # running when smoke fails or is cancelled
     if: >
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'workflow_run' &&
@@ -82,17 +84,18 @@ jobs:
 
       # ─────────────────────────────────────────
       # 6️⃣  Resolve build number
-      #      When auto-triggered: use smoke's run number
-      #      so regression pairs with the right smoke build
-      #      When manual: use own run number
+      #      Auto-triggered: pair with smoke build number
+      #      Manual: use own run number
       # ─────────────────────────────────────────
       - name: Resolve Build Number
         id: build
         run: |
           if [ "${{ github.event_name }}" = "workflow_run" ]; then
             echo "number=${{ github.event.workflow_run.run_number }}" >> $GITHUB_OUTPUT
+            echo "ℹ️  Auto-triggered — using smoke build number: ${{ github.event.workflow_run.run_number }}"
           else
             echo "number=${{ github.run_number }}" >> $GITHUB_OUTPUT
+            echo "ℹ️  Manual trigger — using own run number: ${{ github.run_number }}"
           fi
 
       # ─────────────────────────────────────────
@@ -103,7 +106,7 @@ jobs:
         continue-on-error: true
         run: |
           xvfb-run --auto-servernum -- mvn clean test \
-            -Dtestng.suite.file=src/test/resources/testng-regression.xml \
+            -Dtestng.suite.file=testng-regression.xml \
             -Dcucumber.filter.tags="${{ github.event.inputs.tag || '@regression' }}" \
             -Denv="${{ github.event.inputs.env || 'qa' }}" \
             -Dbrowser="${{ github.event.inputs.browser || 'chromium' }}" \
@@ -155,23 +158,23 @@ jobs:
           ls allure-report-regression/history/ || echo "❌ history missing"
 
       # ─────────────────────────────────────────
-      # 1️⃣1️⃣  Save shared history + versioned report
-      #        + update index page + cleanup old builds
+      # 1️⃣1️⃣  Save history + versioned report + index
       # ─────────────────────────────────────────
       - name: Update gh-pages — History + Versioned Report + Index
         if: always()
         run: |
           BUILD=${{ steps.build.outputs.number }}
-          REPO_URL="https://${{ github.repository_owner }}.github.io/$(echo '${{ github.repository }}' | cut -d'/' -f2)"
+          REPO_NAME=$(echo '${{ github.repository }}' | cut -d'/' -f2)
+          REPO_URL="https://${{ github.repository_owner }}.github.io/${REPO_NAME}"
           MAX_BUILDS=20
 
           # ── Clone gh-pages ──
-          rm -rf gh-pages
+          rm -rf gh-pages-push
           git clone --branch gh-pages --single-branch \
             https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git \
-            gh-pages || mkdir -p gh-pages
+            gh-pages-push
 
-          cd gh-pages
+          cd gh-pages-push
 
           # ── Save shared history ──
           mkdir -p allure-history/shared
@@ -182,13 +185,13 @@ jobs:
           mkdir -p regression-report/build-${BUILD}
           cp -r ../allure-report-regression/. regression-report/build-${BUILD}/
 
-          # ── Write build metadata for index page ──
+          # ── Write build metadata ──
           mkdir -p build-meta
           echo "${{ steps.run.outcome }}" > build-meta/regression-${BUILD}.txt
 
-          # ── Cleanup old builds (keep last MAX_BUILDS) ──
+          # ── Cleanup old regression builds ──
           cd regression-report
-          ls -d build-* 2>/dev/null | sort -t- -k2 -n | head -n -${MAX_BUILDS} | xargs rm -rf
+          ls -d build-* 2>/dev/null | sort -t- -k2 -n | head -n -${MAX_BUILDS} | xargs rm -rf 2>/dev/null || true
           cd ..
 
           # ── Commit and push ──
@@ -197,14 +200,13 @@ jobs:
           git add .
           git diff --cached --quiet \
             && echo "ℹ️  No changes to commit" \
-            || git commit -m "chore(regression): build #${BUILD} report + history [skip ci]"
+            || git commit -m "chore(regression): build #${BUILD} [skip ci]"
           git push origin gh-pages
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # ─────────────────────────────────────────
       # 1️⃣2️⃣  Upload artifacts
-      #        Paired with smoke build number when auto-triggered
       # ─────────────────────────────────────────
       - name: Upload Regression Artifacts
         if: always()
