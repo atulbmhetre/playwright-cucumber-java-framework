@@ -42,12 +42,21 @@ jobs:
       - name: Check Smoke Conclusion
         run: |
           CONCLUSION="${{ github.event.workflow_run.conclusion }}"
+          TRIGGER_EVENT="${{ github.event.workflow_run.event }}"
           echo "Smoke workflow conclusion: ${CONCLUSION}"
-          if [ "${{ github.event_name }}" = "workflow_run" ] && [ "${CONCLUSION}" != "success" ]; then
-            echo "❌ Smoke did not pass (conclusion: ${CONCLUSION}) — skipping regression"
-            exit 1
+          echo "Smoke was triggered by: ${TRIGGER_EVENT}"
+
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            if [ "${TRIGGER_EVENT}" = "workflow_dispatch" ]; then
+              echo "ℹ️  Smoke was manually triggered — regression will not auto-run"
+              exit 1
+            fi
+            if [ "${CONCLUSION}" != "success" ]; then
+              echo "❌ Smoke did not pass (conclusion: ${CONCLUSION}) — skipping regression"
+              exit 1
+            fi
           fi
-          echo "✅ Smoke passed — proceeding with regression"
+          echo "✅ Proceeding with regression"
 
       # ─────────────────────────────────────────
       # 1️⃣  Checkout main branch
