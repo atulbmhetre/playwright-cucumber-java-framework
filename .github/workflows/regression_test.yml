@@ -40,6 +40,7 @@ jobs:
       #      conclusion check quirk
       # ─────────────────────────────────────────
       - name: Check Smoke Conclusion
+        id: guard
         run: |
           CONCLUSION="${{ github.event.workflow_run.conclusion }}"
           TRIGGER_EVENT="${{ github.event.workflow_run.event }}"
@@ -49,25 +50,31 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_run" ]; then
             if [ "${TRIGGER_EVENT}" = "workflow_dispatch" ]; then
               echo "ℹ️  Smoke was manually triggered — regression will not auto-run"
-              exit 1
-            fi
-            if [ "${CONCLUSION}" != "success" ]; then
+              echo "proceed=false" >> $GITHUB_OUTPUT
+            elif [ "${CONCLUSION}" != "success" ]; then
               echo "❌ Smoke did not pass (conclusion: ${CONCLUSION}) — skipping regression"
-              exit 1
+              echo "proceed=false" >> $GITHUB_OUTPUT
+            else
+              echo "✅ Smoke passed via push — proceeding with regression"
+              echo "proceed=true" >> $GITHUB_OUTPUT
             fi
-          fi
-          echo "✅ Proceeding with regression"
+          else
+            echo "✅ Manual regression trigger — proceeding"
+            echo "proceed=true" >> $GITHUB_OUTPUT
+          fi"
 
       # ─────────────────────────────────────────
       # 1️⃣  Checkout main branch
       # ─────────────────────────────────────────
       - name: Checkout Main
+        if: steps.guard.outputs.proceed == 'true'
         uses: actions/checkout@v4
 
       # ─────────────────────────────────────────
       # 2️⃣  Setup Java 21
       # ─────────────────────────────────────────
       - name: Setup Java
+        if: steps.guard.outputs.proceed == 'true'
         uses: actions/setup-java@v4
         with:
           java-version: '21'
@@ -77,18 +84,21 @@ jobs:
       # 3️⃣  Install Allure CLI
       # ─────────────────────────────────────────
       - name: Install Allure CLI
+        if: steps.guard.outputs.proceed == 'true'
         run: npm install -g allure-commandline
 
       # ─────────────────────────────────────────
       # 4️⃣  Install Playwright browsers via Java CLI
       # ─────────────────────────────────────────
       - name: Install Playwright Browsers
+        if: steps.guard.outputs.proceed == 'true'
         run: mvn exec:java -e -D exec.mainClass=com.microsoft.playwright.CLI -D exec.args="install --with-deps" -D exec.classpathScope=test
 
       # ─────────────────────────────────────────
       # 5️⃣  Restore shared history from gh-pages
       # ─────────────────────────────────────────
       - name: Checkout gh-pages for History
+        if: steps.guard.outputs.proceed == 'true'
         uses: actions/checkout@v4
         with:
           ref: gh-pages
@@ -101,6 +111,7 @@ jobs:
       #      Manual: use own run number
       # ─────────────────────────────────────────
       - name: Resolve Build Number
+        if: steps.guard.outputs.proceed == 'true'
         id: build
         run: |
           if [ "${{ github.event_name }}" = "workflow_run" ]; then
@@ -115,6 +126,7 @@ jobs:
       # 7️⃣  Run Regression Tests
       # ─────────────────────────────────────────
       - name: Run Regression Tests
+        if: steps.guard.outputs.proceed == 'true'
         id: run
         continue-on-error: true
         run: |
@@ -128,7 +140,7 @@ jobs:
             -Dallure.results.directory=target/allure-results
 
       - name: Restore Shared History into allure-results
-        if: always()
+        if: steps.guard.outputs.proceed == 'true'
         run: |
           mkdir -p target/allure-results/history
           if [ -d gh-pages/allure-history/shared/history ]; then
@@ -143,7 +155,7 @@ jobs:
       #      Remove after first confirmed clean run
       # ─────────────────────────────────────────
       - name: Debug — Verify Output Paths
-        if: always()
+        if: steps.guard.outputs.proceed == 'true'
         run: |
           echo "====== target/allure-results ======"
           ls -la target/allure-results/ || echo "❌ NOT FOUND"
@@ -160,7 +172,7 @@ jobs:
       # 9️⃣  Generate Defect Age Report
       # ─────────────────────────────────────────
       - name: Generate Defect Age Report
-        if: always()
+        if: steps.guard.outputs.proceed == 'true'
         run: |
           mvn exec:java \
             -Dexec.mainClass="com.samtech.qa.testutilities.AllureDefectAge" \
@@ -175,7 +187,7 @@ jobs:
       # 🔟  Generate Allure HTML Report
       # ─────────────────────────────────────────
       - name: Generate Allure Report
-        if: always()
+        if: steps.guard.outputs.proceed == 'true'
         run: |
           allure generate target/allure-results -o allure-report-regression --clean
           echo "====== allure-report-regression/history ======"
@@ -185,7 +197,7 @@ jobs:
       # 1️⃣1️⃣  Save history + versioned report + index
       # ─────────────────────────────────────────
       - name: Update gh-pages — History + Versioned Report + Index
-        if: always()
+        if: steps.guard.outputs.proceed == 'true'
         run: |
           BUILD=${{ steps.build.outputs.number }}
           REPO_NAME=$(echo '${{ github.repository }}' | cut -d'/' -f2)
@@ -234,7 +246,7 @@ jobs:
       # 1️⃣2️⃣  Upload artifacts
       # ─────────────────────────────────────────
       - name: Upload Regression Artifacts
-        if: always()
+        if: steps.guard.outputs.proceed == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: regression-artifacts-build-${{ steps.build.outputs.number }}
@@ -251,7 +263,7 @@ jobs:
       # 1️⃣3️⃣  Report outcome — non-blocking
       # ─────────────────────────────────────────
       - name: Report Regression Outcome
-        if: always()
+        if: steps.guard.outputs.proceed == 'true'
         run: |
           if [ "${{ steps.run.outcome }}" = "failure" ]; then
             echo "⚠️  Regression tests FAILED — check the report"
