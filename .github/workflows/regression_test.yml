@@ -118,10 +118,9 @@ jobs:
             echo "number=${{ github.event.workflow_run.run_number }}" >> $GITHUB_OUTPUT
             echo "ℹ️  Auto-triggered — using smoke build number: ${{ github.event.workflow_run.run_number }}"
           else
-            # Manual trigger — use timestamp to avoid collision with smoke build numbers
-            TIMESTAMP=$(date +%Y%m%d%H%M%S)
-            echo "number=m${TIMESTAMP}" >> $GITHUB_OUTPUT
-            echo "ℹ️  Manual trigger — using unique ID: m${TIMESTAMP}"
+            # Manual trigger — prefix with m to distinguish from smoke build numbers
+            echo "number=m${{ github.run_number }}" >> $GITHUB_OUTPUT
+            echo "ℹ️  Manual trigger — using build ID: m${{ github.run_number }}"
           fi
 
       # ─────────────────────────────────────────

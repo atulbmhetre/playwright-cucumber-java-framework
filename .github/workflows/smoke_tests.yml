@@ -272,7 +272,7 @@ jobs:
                 const manifestText = await safeFetch(`${repoUrl}/build-meta/manual-regression-builds.txt`);
                 const manualBuilds = manifestText ? manifestText.split("\n").map(s => s.trim()).filter(Boolean) : [];
                 const allBuilds = [...new Set([...smokeBuilds, ...regressionOnly, ...manualBuilds])].sort((a,b) => {
-                  const toNum = x => typeof x === "string" && x.startsWith("m") ? parseInt(x.slice(1)) + 1e15 : x;
+                  const toNum = x => typeof x === "string" && x.startsWith("m") ? parseInt(x.slice(1)) : x;
                   return toNum(b) - toNum(a);
                 }).slice(0,20);
                 if (allBuilds.length === 0) {
@@ -302,8 +302,9 @@ jobs:
                   const regressionLink = regressionStatus === null
                     ? '<span class="na">—</span>'
                     : `<a href="${repoUrl}/regression-report/build-${build}/index.html" target="_blank">View Report</a>`;
+                  const buildLabel = String(build).startsWith('m') ? `Manual #${build.slice(1)}` : `#${build}`;
                   tbody.innerHTML += `<tr>
-                    <td><strong>#${build}</strong></td>
+                    <td><strong>${buildLabel}</strong></td>
                     <td>${smokeBadge}</td>
                     <td>${smokeLink}</td>
                     <td>${regressionBadge}</td>
