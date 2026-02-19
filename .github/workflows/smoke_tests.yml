@@ -273,7 +273,7 @@ jobs:
                     ? '<span class="badge fail">❌ FAILED</span>'
                     : '<span class="badge pending">UNKNOWN</span>';
                   const regressionBadge = regressionStatus === null
-                    ? '<span class="na">Not triggered</span>'
+                    ? '<span class="na">Manual smoke — regression skipped</span>'
                     : regressionStatus === 'success'
                     ? '<span class="badge pass">✅ PASSED</span>'
                     : '<span class="badge fail">❌ FAILED</span>';
