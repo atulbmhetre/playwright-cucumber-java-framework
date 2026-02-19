@@ -118,8 +118,10 @@ jobs:
             echo "number=${{ github.event.workflow_run.run_number }}" >> $GITHUB_OUTPUT
             echo "ℹ️  Auto-triggered — using smoke build number: ${{ github.event.workflow_run.run_number }}"
           else
-            echo "number=${{ github.run_number }}" >> $GITHUB_OUTPUT
-            echo "ℹ️  Manual trigger — using own run number: ${{ github.run_number }}"
+            # Manual trigger — use timestamp to avoid collision with smoke build numbers
+            TIMESTAMP=$(date +%Y%m%d%H%M%S)
+            echo "number=m${TIMESTAMP}" >> $GITHUB_OUTPUT
+            echo "ℹ️  Manual trigger — using unique ID: m${TIMESTAMP}"
           fi
 
       # ─────────────────────────────────────────
@@ -234,6 +236,10 @@ jobs:
           # ── Write build metadata ──
           mkdir -p build-meta
           echo "${{ steps.run.outcome }}" > build-meta/regression-${BUILD}.txt
+          # If manual run, append to manifest so index page can discover it
+          if [[ "${BUILD}" == m* ]]; then
+            echo "${BUILD}" >> build-meta/manual-regression-builds.txt
+          fi
 
           # ── Cleanup old regression builds ──
           cd regression-report

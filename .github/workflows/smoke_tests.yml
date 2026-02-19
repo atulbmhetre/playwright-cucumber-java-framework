@@ -269,7 +269,12 @@ jobs:
                 );
                 const smokeBuilds = smokeResults.filter(n => n !== null);
                 const regressionOnly = regressionResults.filter(n => n !== null && !smokeBuilds.includes(n));
-                const allBuilds = [...new Set([...smokeBuilds, ...regressionOnly])].sort((a,b) => b-a).slice(0,20);
+                const manifestText = await safeFetch(`${repoUrl}/build-meta/manual-regression-builds.txt`);
+                const manualBuilds = manifestText ? manifestText.split("\n").map(s => s.trim()).filter(Boolean) : [];
+                const allBuilds = [...new Set([...smokeBuilds, ...regressionOnly, ...manualBuilds])].sort((a,b) => {
+                  const toNum = x => typeof x === "string" && x.startsWith("m") ? parseInt(x.slice(1)) : x * 1e14;
+                  return toNum(b) - toNum(a);
+                }).slice(0,20);
                 if (allBuilds.length === 0) {
                   tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#aaa;padding:30px">No builds found yet</td></tr>';
                   return;
@@ -279,7 +284,9 @@ jobs:
                   const smokeStatus = await safeFetch(`${repoUrl}/build-meta/smoke-${build}.txt`);
                   const regressionStatus = await safeFetch(`${repoUrl}/build-meta/regression-${build}.txt`);
                   const triggerType = await safeFetch(`${repoUrl}/build-meta/smoke-trigger-${build}.txt`);
-                  const smokeBadge = smokeStatus === 'success'
+                  const smokeBadge = smokeStatus === null
+                    ? '<span class="na">—</span>'
+                    : smokeStatus === 'success'
                     ? '<span class="badge pass">✅ PASSED</span>'
                     : smokeStatus === 'failure'
                     ? '<span class="badge fail">❌ FAILED</span>'
@@ -289,7 +296,9 @@ jobs:
                     : regressionStatus === 'success'
                     ? '<span class="badge pass">✅ PASSED</span>'
                     : '<span class="badge fail">❌ FAILED</span>';
-                  const smokeLink = `<a href="${repoUrl}/smoke-report/build-${build}/index.html" target="_blank">View Report</a>`;
+                  const smokeLink = smokeStatus === null
+                  ? '<span class="na">—</span>'
+                  : `<a href="${repoUrl}/smoke-report/build-${build}/index.html" target="_blank">View Report</a>`;
                   const regressionLink = regressionStatus === null
                     ? '<span class="na">—</span>'
                     : `<a href="${repoUrl}/regression-report/build-${build}/index.html" target="_blank">View Report</a>`;
