@@ -5,7 +5,7 @@ Feature: User Authentication
     Given the user is on the login page
 
   @smoke
-  Scenario: Successful login with admin credentials__
+  Scenario: Successful login with admin credentials___
     When the user logs into the application with user credentials
     Then the user should see the "Dashboard" overview
 
