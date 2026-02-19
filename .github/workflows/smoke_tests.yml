@@ -182,10 +182,10 @@ jobs:
           mkdir -p build-meta
           echo "${{ steps.run.outcome }}" > build-meta/smoke-${BUILD}.txt
           # Write marker if smoke was manually triggered
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "manual" > build-meta/smoke-trigger-${BUILD}.txt
-          else
+          if [ "${{ github.event_name }}" = "push" ]; then
             echo "push" > build-meta/smoke-trigger-${BUILD}.txt
+          else
+            echo "manual" > build-meta/smoke-trigger-${BUILD}.txt
           fi
 
           # ── Cleanup old smoke builds (keep last MAX_BUILDS) ──
@@ -261,16 +261,21 @@ jobs:
                 const tbody = document.getElementById("tbody");
                 const rows = [];
                 const checks = Array.from({length: 200}, (_, i) => i + 1);
-                const results = await Promise.all(
+                const smokeResults = await Promise.all(
                   checks.map(n => safeFetch(`${repoUrl}/build-meta/smoke-${n}.txt`).then(v => v !== null ? n : null))
                 );
-                const found = results.filter(n => n !== null).sort((a,b) => b-a).slice(0,20);
-                if (found.length === 0) {
+                const regressionResults = await Promise.all(
+                  checks.map(n => safeFetch(`${repoUrl}/build-meta/regression-${n}.txt`).then(v => v !== null ? n : null))
+                );
+                const smokeBuilds = smokeResults.filter(n => n !== null);
+                const regressionOnly = regressionResults.filter(n => n !== null && !smokeBuilds.includes(n));
+                const allBuilds = [...new Set([...smokeBuilds, ...regressionOnly])].sort((a,b) => b-a).slice(0,20);
+                if (allBuilds.length === 0) {
                   tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#aaa;padding:30px">No builds found yet</td></tr>';
                   return;
                 }
                 tbody.innerHTML = "";
-                for (const build of found) {
+                for (const build of allBuilds) {
                   const smokeStatus = await safeFetch(`${repoUrl}/build-meta/smoke-${build}.txt`);
                   const regressionStatus = await safeFetch(`${repoUrl}/build-meta/regression-${build}.txt`);
                   const triggerType = await safeFetch(`${repoUrl}/build-meta/smoke-trigger-${build}.txt`);
