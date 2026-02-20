@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Test Reports Dashboard</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; background: #f5f5f5; }
+    header { background: #2c3e50; color: white; padding: 20px 40px; }
+    header h1 { font-size: 22px; }
+    header p { margin-top: 4px; opacity: 0.7; font-size: 12px; }
+    .container { max-width: 1100px; margin: 30px auto; padding: 0 20px; }
+    table { width: 100%; border-collapse: collapse; background: white;
+            border-radius: 8px; overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    th { background: #2c3e50; color: white; padding: 14px 16px;
+         text-align: left; font-size: 13px; }
+    td { padding: 12px 16px; border-bottom: 1px solid #eee; font-size: 13px; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #f9f9f9; }
+    .badge { display: inline-block; padding: 3px 10px; border-radius: 12px;
+             font-size: 11px; font-weight: bold; }
+    .pass { background: #d4edda; color: #155724; }
+    .fail { background: #f8d7da; color: #721c24; }
+    .pending { background: #fff3cd; color: #856404; }
+    a { color: #2980b9; text-decoration: none; font-weight: 500; }
+    a:hover { text-decoration: underline; }
+    .na { color: #aaa; font-style: italic; }
+    #loading { text-align: center; padding: 40px; color: #aaa; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🧪 Test Reports Dashboard</h1>
+    <p>Smoke &amp; Regression — Last 20 Builds</p>
+  </header>
+  <div class="container">
+    <table>
+      <thead>
+        <tr>
+          <th>Build</th>
+          <th>Smoke Status</th>
+          <th>Smoke Report</th>
+          <th>Regression Status</th>
+          <th>Regression Report</th>
+        </tr>
+      </thead>
+      <tbody id="tbody">
+        <tr><td colspan="5" id="loading">Loading builds...</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <script>
+    const repoUrl = "https://atulbmhetre.github.io/playwright-cucumber-java-framework";
+    async function safeFetch(url) {
+      try {
+        const r = await fetch(url);
+        if (!r.ok) return null;
+        return (await r.text()).trim();
+      } catch { return null; }
+    }
+    async function loadBuilds() {
+      const tbody = document.getElementById("tbody");
+      const rows = [];
+      const checks = Array.from({length: 200}, (_, i) => i + 1);
+      const smokeResults = await Promise.all(
+        checks.map(n => safeFetch(`${repoUrl}/build-meta/smoke-${n}.txt`).then(v => v !== null ? n : null))
+      );
+      const regressionResults = await Promise.all(
+        checks.map(n => safeFetch(`${repoUrl}/build-meta/regression-${n}.txt`).then(v => v !== null ? n : null))
+      );
+      const smokeBuilds = smokeResults.filter(n => n !== null);
+      const regressionOnly = regressionResults.filter(n => n !== null && !smokeBuilds.includes(n));
+      const manifestText = await safeFetch(`${repoUrl}/build-meta/manual-regression-builds.txt`);
+      const manualBuilds = manifestText ? manifestText.split("\n").map(s => s.trim()).filter(Boolean) : [];
+      const allBuildIds = [...new Set([...smokeBuilds, ...regressionOnly, ...manualBuilds])];
+      // Get timestamps for all builds to sort by actual execution time
+      const buildTimes = await Promise.all(allBuildIds.map(async id => {
+        const smokeRaw2 = await safeFetch(`${repoUrl}/build-meta/smoke-${id}.txt`);
+        const regRaw2 = await safeFetch(`${repoUrl}/build-meta/regression-${id}.txt`);
+        const smokeTs = smokeRaw2 && smokeRaw2.includes('|') ? parseInt(smokeRaw2.split('|')[1]) : 0;
+        const regTs = regRaw2 && regRaw2.includes('|') ? parseInt(regRaw2.split('|')[1]) : 0;
+        return { id, ts: Math.max(smokeTs, regTs) };
+      }));
+      const allBuilds = buildTimes.sort((a,b) => b.ts - a.ts).slice(0,20).map(x => x.id);
+      if (allBuilds.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#aaa;padding:30px">No builds found yet</td></tr>';
+        return;
+      }
+      tbody.innerHTML = "";
+      for (const build of allBuilds) {
+        const smokeRaw = await safeFetch(`${repoUrl}/build-meta/smoke-${build}.txt`);
+        const regressionRaw = await safeFetch(`${repoUrl}/build-meta/regression-${build}.txt`);
+        const smokeStatus = smokeRaw ? smokeRaw.split('|')[0] : null;
+        const regressionStatus = regressionRaw ? regressionRaw.split('|')[0] : null;
+        const triggerType = await safeFetch(`${repoUrl}/build-meta/smoke-trigger-${build}.txt`);
+        const smokeBadge = smokeStatus === null
+          ? '<span class="na">—</span>'
+          : smokeStatus === 'success'
+          ? '<span class="badge pass">✅ PASSED</span>'
+          : smokeStatus === 'failure'
+          ? '<span class="badge fail">❌ FAILED</span>'
+          : '<span class="badge pending">UNKNOWN</span>';
+        const regressionBadge = regressionStatus === null
+          ? (triggerType === 'manual' ? '<span class="na">Manual smoke — regression skipped</span>' : '<span class="na">Smoke failed — regression skipped</span>')
+          : regressionStatus === 'success'
+          ? '<span class="badge pass">✅ PASSED</span>'
+          : '<span class="badge fail">❌ FAILED</span>';
+        const smokeLink = smokeStatus === null
+        ? '<span class="na">—</span>'
+        : `<a href="${repoUrl}/smoke-report/build-${build}/index.html" target="_blank">View Report</a>`;
+        const regressionLink = regressionStatus === null
+          ? '<span class="na">—</span>'
+          : `<a href="${repoUrl}/regression-report/build-${build}/index.html" target="_blank">View Report</a>`;
+        const buildLabel = String(build).startsWith('m') ? `Manual #${build.slice(1)}` : (triggerType === 'manual' ? `Manual #${build}` : `#${build}`);
+        tbody.innerHTML += `<tr>
+          <td><strong>${buildLabel}</strong></td>
+          <td>${smokeBadge}</td>
+          <td>${smokeLink}</td>
+          <td>${regressionBadge}</td>
+          <td>${regressionLink}</td>
+        </tr>`;
+      }
+    }
+    loadBuilds();
+  </script>
+</body>
+</html>
