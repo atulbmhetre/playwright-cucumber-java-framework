@@ -76,6 +76,12 @@ public class ExcelReader {
         // "env" is passed as a Maven flag (-Denv=qa) or defaults to "QA"
         String env = System.getProperty("env", "QA");
         String filePath = System.getProperty("user.dir") + "/src/test/resources/testdata/" + env.trim().toLowerCase() + "/TestData.xlsx";
+        File testData = new File(filePath);
+        if (!testData.exists()) {
+            throw new RuntimeException(
+                    "TestData.xlsx not found for environment: " + env
+                            + ". Expected at: " + testData.getPath());
+        }
 
         List<Map<String, String>> dataList = new ArrayList<>();
 

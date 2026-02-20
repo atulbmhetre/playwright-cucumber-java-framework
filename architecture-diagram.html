@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Framework Architecture — High Level Diagram</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg: #0a0e1a;
+    --surface: #111827;
+    --surface2: #1a2236;
+    --border: #1e2d45;
+    --accent: #00d4ff;
+    --accent2: #00ff9d;
+    --accent3: #ff6b35;
+    --accent4: #a855f7;
+    --text: #e2e8f0;
+    --text-dim: #64748b;
+    --text-bright: #f8fafc;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    padding: 40px 20px 80px;
+    overflow-x: hidden;
+  }
+
+  /* Background grid */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .wrapper {
+    max-width: 1100px;
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Header */
+  header {
+    text-align: center;
+    margin-bottom: 60px;
+    animation: fadeDown 0.6s ease both;
+  }
+
+  header .label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 4px;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+
+  header h1 {
+    font-size: clamp(28px, 5vw, 48px);
+    font-weight: 800;
+    color: var(--text-bright);
+    line-height: 1.1;
+    margin-bottom: 12px;
+  }
+
+  header p {
+    color: var(--text-dim);
+    font-size: 14px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* Section labels */
+  .section-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .section-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* ── LAYER ROWS ── */
+  .layer {
+    margin-bottom: 8px;
+    animation: fadeUp 0.5s ease both;
+  }
+
+  .layer:nth-child(1) { animation-delay: 0.1s; }
+  .layer:nth-child(2) { animation-delay: 0.2s; }
+  .layer:nth-child(3) { animation-delay: 0.3s; }
+  .layer:nth-child(4) { animation-delay: 0.4s; }
+  .layer:nth-child(5) { animation-delay: 0.5s; }
+
+  .layer-row {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+  }
+
+  /* Layer tag on left */
+  .layer-tag {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    transform: rotate(180deg);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    padding: 12px 8px;
+    border-right: 1px solid var(--border);
+    min-width: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface);
+    border-radius: 6px 0 0 6px;
+    flex-shrink: 0;
+  }
+
+  .layer-content {
+    flex: 1;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  /* ── CARDS ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 0 8px 8px 0;
+    padding: 16px 20px;
+    flex: 1;
+    min-width: 160px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.2s, transform 0.2s;
+    cursor: default;
+  }
+
+  .card:hover {
+    transform: translateY(-2px);
+    border-color: var(--accent);
+  }
+
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 3px;
+    height: 100%;
+    background: var(--card-color, var(--accent));
+  }
+
+  .card-icon {
+    font-size: 20px;
+    margin-bottom: 8px;
+    display: block;
+  }
+
+  .card-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-bright);
+    margin-bottom: 4px;
+  }
+
+  .card-desc {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    line-height: 1.6;
+  }
+
+  .card-tech {
+    margin-top: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    padding: 2px 7px;
+    border-radius: 3px;
+    background: rgba(255,255,255,0.05);
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+  }
+
+  /* Color variants */
+  .c-blue  { --card-color: var(--accent); }
+  .c-green { --card-color: var(--accent2); }
+  .c-orange{ --card-color: var(--accent3); }
+  .c-purple{ --card-color: var(--accent4); }
+  .c-yellow{ --card-color: #fbbf24; }
+  .c-pink  { --card-color: #f472b6; }
+
+  /* ── CONNECTOR ARROWS ── */
+  .connector {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 0;
+    animation: fadeUp 0.4s ease both;
+  }
+
+  .arrow-line {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .arrow-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: var(--text-dim);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    background: var(--bg);
+    padding: 0 8px;
+  }
+
+  .arrow-shaft {
+    width: 1px;
+    height: 24px;
+    background: linear-gradient(to bottom, var(--border), var(--accent));
+    position: relative;
+  }
+
+  .arrow-shaft::after {
+    content: '▼';
+    position: absolute;
+    bottom: -14px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: var(--accent);
+    font-size: 10px;
+  }
+
+  /* ── FLOW DIAGRAM (CI/CD) ── */
+  .flow-section {
+    margin-top: 48px;
+    animation: fadeUp 0.6s ease 0.5s both;
+  }
+
+  .flow-row {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+  }
+
+  .flow-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 18px;
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  .flow-box .name {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-bright);
+    margin-bottom: 2px;
+  }
+
+  .flow-box .sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: var(--text-dim);
+  }
+
+  .flow-box.trigger  { border-color: var(--accent3); }
+  .flow-box.smoke    { border-color: var(--accent); }
+  .flow-box.regress  { border-color: var(--accent2); }
+  .flow-box.report   { border-color: var(--accent4); }
+  .flow-box.gate     { border-color: #fbbf24; background: rgba(251,191,36,0.05); }
+
+  .flow-arrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: var(--text-dim);
+    padding: 0 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    flex-shrink: 0;
+  }
+
+  .flow-arrow span {
+    font-size: 14px;
+    color: var(--accent);
+  }
+
+  .flow-arrow .cond {
+    color: #fbbf24;
+    font-size: 8px;
+  }
+
+  /* ── DATA FLOW ── */
+  .data-section {
+    margin-top: 48px;
+    animation: fadeUp 0.6s ease 0.6s both;
+  }
+
+  .data-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 8px;
+  }
+
+  .data-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .data-card::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--data-color, var(--accent));
+    opacity: 0.6;
+  }
+
+  .data-card .dc-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+  }
+
+  .data-card .dc-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-bright);
+    margin-bottom: 6px;
+  }
+
+  .data-card .dc-items {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    line-height: 1.8;
+  }
+
+  .data-card .dc-items li {
+    list-style: none;
+    padding-left: 12px;
+    position: relative;
+  }
+
+  .data-card .dc-items li::before {
+    content: '→';
+    position: absolute;
+    left: 0;
+    color: var(--data-color, var(--accent));
+  }
+
+  /* ── LEGEND ── */
+  .legend {
+    margin-top: 48px;
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+    animation: fadeUp 0.6s ease 0.7s both;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+  }
+
+  .legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+
+  /* Animations */
+  @keyframes fadeDown {
+    from { opacity: 0; transform: translateY(-20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Responsive */
+  @media (max-width: 600px) {
+    .layer-row { flex-direction: column; }
+    .layer-tag { writing-mode: horizontal-tb; transform: none; border-right: none; border-bottom: 1px solid var(--border); border-radius: 6px 6px 0 0; min-width: unset; }
+    .card { border-radius: 0 0 8px 8px; min-width: unset; }
+    .flow-row { flex-direction: column; align-items: flex-start; }
+  }
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+  <!-- Header -->
+  <header>
+    <div class="label">Architecture Overview</div>
+    <h1>Playwright Cucumber Java Framework</h1>
+    <p>Java 21 · Playwright · Cucumber 7 · TestNG · Allure · GitHub Actions</p>
+  </header>
+
+  <!-- ── LAYER 1: TRIGGER ── -->
+  <div class="section-label">Entry Points</div>
+  <div class="layer">
+    <div class="layer-row">
+      <div class="layer-tag">trigger</div>
+      <div class="layer-content">
+        <div class="card c-orange">
+          <span class="card-icon">⬆️</span>
+          <div class="card-name">Code Push to main</div>
+          <div class="card-desc">Developer commits and pushes. Auto-triggers smoke pipeline.</div>
+          <div class="card-tech"><span class="tag">git push</span><span class="tag">GitHub Actions</span></div>
+        </div>
+        <div class="card c-orange">
+          <span class="card-icon">🖱️</span>
+          <div class="card-name">Manual Trigger</div>
+          <div class="card-desc">GitHub Actions UI. Custom env, browser, tags, threads.</div>
+          <div class="card-tech"><span class="tag">workflow_dispatch</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="connector">
+    <div class="arrow-line">
+      <div class="arrow-shaft"></div>
+    </div>
+  </div>
+
+  <!-- ── LAYER 2: CI/CD ── -->
+  <div class="section-label">CI/CD Pipelines</div>
+  <div class="layer">
+    <div class="layer-row">
+      <div class="layer-tag">ci/cd</div>
+      <div class="layer-content">
+        <div class="card c-blue">
+          <span class="card-icon">💨</span>
+          <div class="card-name">Smoke Workflow</div>
+          <div class="card-desc">Runs @smoke tagged scenarios. Quality gate — blocks regression if it fails. Publishes report to GitHub Pages.</div>
+          <div class="card-tech"><span class="tag">smoke-tests.yml</span><span class="tag">testng-smoke.xml</span></div>
+        </div>
+        <div class="card c-green">
+          <span class="card-icon">🔁</span>
+          <div class="card-name">Regression Workflow</div>
+          <div class="card-desc">Runs @regression scenarios. Auto-triggers after smoke passes. Non-blocking — failure doesn't fail pipeline.</div>
+          <div class="card-tech"><span class="tag">regression-tests.yml</span><span class="tag">testng-regression.xml</span></div>
+        </div>
+        <div class="card c-yellow">
+          <span class="card-icon">🔄</span>
+          <div class="card-name">Failed Test Rerun</div>
+          <div class="card-desc">Reads failed_scenarios.txt. Re-runs only failed scenarios. Gives flaky tests a second chance.</div>
+          <div class="card-tech"><span class="tag">FailedTestRunner</span><span class="tag">rerun plugin</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="connector">
+    <div class="arrow-line">
+      <div class="arrow-shaft"></div>
+    </div>
+  </div>
+
+  <!-- ── LAYER 3: RUNNER + CONFIG ── -->
+  <div class="section-label">Test Execution Core</div>
+  <div class="layer">
+    <div class="layer-row">
+      <div class="layer-tag">core</div>
+      <div class="layer-content">
+        <div class="card c-blue">
+          <span class="card-icon">🏃</span>
+          <div class="card-name">TestNG Runners</div>
+          <div class="card-desc">SmokeTestsRunner / RegressionTestsRunner. Parallel thread config. Suite lifecycle (@BeforeSuite / @AfterSuite).</div>
+          <div class="card-tech"><span class="tag">TestNG</span><span class="tag">Cucumber</span><span class="tag">parallel</span></div>
+        </div>
+        <div class="card c-purple">
+          <span class="card-icon">⚙️</span>
+          <div class="card-name">ConfigLoader</div>
+          <div class="card-desc">Singleton. Loads base + env config. Priority: CLI flag → env config → base config → defaults.</div>
+          <div class="card-tech"><span class="tag">config.properties</span><span class="tag">{env}.config.properties</span></div>
+        </div>
+        <div class="card c-orange">
+          <span class="card-icon">🔗</span>
+          <div class="card-name">TestContext</div>
+          <div class="card-desc">Shared state per scenario. Injected via PicoContainer DI. Holds Page, ElementUtils, scenario name.</div>
+          <div class="card-tech"><span class="tag">PicoContainer</span><span class="tag">DI</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="connector">
+    <div class="arrow-line">
+      <div class="arrow-shaft"></div>
+    </div>
+  </div>
+
+  <!-- ── LAYER 4: FRAMEWORK ── -->
+  <div class="section-label">Framework Layer</div>
+  <div class="layer">
+    <div class="layer-row">
+      <div class="layer-tag">framework</div>
+      <div class="layer-content">
+        <div class="card c-blue">
+          <span class="card-icon">🌐</span>
+          <div class="card-name">DriverFactory</div>
+          <div class="card-desc">ThreadLocal browser management. Launches Chromium / Firefox / WebKit. Video recording. Timeout config.</div>
+          <div class="card-tech"><span class="tag">Playwright</span><span class="tag">ThreadLocal</span><span class="tag">video</span></div>
+        </div>
+        <div class="card c-green">
+          <span class="card-icon">🎯</span>
+          <div class="card-name">ElementUtils</div>
+          <div class="card-desc">Fallback selector strategy. click, fill, getText, isVisible, waitForURL, waitForPageLoad, waitForPageStable.</div>
+          <div class="card-tech"><span class="tag">varargs selectors</span><span class="tag">waits</span></div>
+        </div>
+        <div class="card c-pink">
+          <span class="card-icon">🪝</span>
+          <div class="card-name">ApplicationHooks</div>
+          <div class="card-desc">Before/After lifecycle. Screenshots, Playwright traces, video capture, browser teardown. Ordered execution.</div>
+          <div class="card-tech"><span class="tag">@Before</span><span class="tag">@After</span><span class="tag">Allure</span></div>
+        </div>
+        <div class="card c-purple">
+          <span class="card-icon">📄</span>
+          <div class="card-name">Page Objects</div>
+          <div class="card-desc">One class per page. All extend BasePage. Selectors as constants. Steps call page methods, not raw Playwright.</div>
+          <div class="card-tech"><span class="tag">BasePage</span><span class="tag">POM</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="connector">
+    <div class="arrow-line">
+      <div class="arrow-shaft"></div>
+    </div>
+  </div>
+
+  <!-- ── LAYER 5: DATA + UTILS ── -->
+  <div class="section-label">Data & Utilities</div>
+  <div class="layer">
+    <div class="layer-row">
+      <div class="layer-tag">data</div>
+      <div class="layer-content">
+        <div class="card c-green">
+          <span class="card-icon">📊</span>
+          <div class="card-name">ExcelReader</div>
+          <div class="card-desc">Singleton + cache. Reads TestData.xlsx once per sheet. Returns rows as Map&lt;column, value&gt;.</div>
+          <div class="card-tech"><span class="tag">Apache POI</span><span class="tag">Singleton</span><span class="tag">cache</span></div>
+        </div>
+        <div class="card c-green">
+          <span class="card-icon">🗂️</span>
+          <div class="card-name">DataManager</div>
+          <div class="card-desc">Fetches one row by ScenarioName key. Throws clear error if not found.</div>
+          <div class="card-tech"><span class="tag">getTestData()</span></div>
+        </div>
+        <div class="card c-orange">
+          <span class="card-icon">📍</span>
+          <div class="card-name">FailedLocatorCollector</div>
+          <div class="card-desc">Tracks broken selectors across all threads. Deduplicates. Writes JSON report at suite end.</div>
+          <div class="card-tech"><span class="tag">ThreadLocal</span><span class="tag">synchronized</span><span class="tag">JSON</span></div>
+        </div>
+        <div class="card c-purple">
+          <span class="card-icon">📸</span>
+          <div class="card-name">TestProofsCollection</div>
+          <div class="card-desc">Attaches step screenshots to Allure. Controlled by config flags per pass/fail status.</div>
+          <div class="card-tech"><span class="tag">Allure</span><span class="tag">stepStatus</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="connector">
+    <div class="arrow-line">
+      <div class="arrow-shaft"></div>
+    </div>
+  </div>
+
+  <!-- ── LAYER 6: OUTPUT ── -->
+  <div class="section-label">Outputs</div>
+  <div class="layer">
+    <div class="layer-row">
+      <div class="layer-tag">output</div>
+      <div class="layer-content">
+        <div class="card c-blue">
+          <span class="card-icon">📈</span>
+          <div class="card-name">Allure Report</div>
+          <div class="card-desc">Interactive HTML report. History trends. Screenshots, videos, traces attached per scenario.</div>
+          <div class="card-tech"><span class="tag">allure generate</span><span class="tag">GitHub Pages</span></div>
+        </div>
+        <div class="card c-purple">
+          <span class="card-icon">🌍</span>
+          <div class="card-name">Dashboard</div>
+          <div class="card-desc">Live GitHub Pages site. Shows last 20 builds. Pass/fail badges + report links for smoke & regression.</div>
+          <div class="card-tech"><span class="tag">gh-pages</span><span class="tag">index.html</span></div>
+        </div>
+        <div class="card c-orange">
+          <span class="card-icon">🐛</span>
+          <div class="card-name">Defect Age Report</div>
+          <div class="card-desc">CSV showing how many consecutive builds each test has been failing. Helps prioritise fixes.</div>
+          <div class="card-tech"><span class="tag">AllureDefectAge</span><span class="tag">history.json</span></div>
+        </div>
+        <div class="card c-yellow">
+          <span class="card-icon">🔍</span>
+          <div class="card-name">Failed Locators JSON</div>
+          <div class="card-desc">All broken selectors from the run. Grouped by locator with affected scenarios listed.</div>
+          <div class="card-tech"><span class="tag">failedLocators_*.json</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── CI/CD FLOW ── -->
+  <div class="flow-section">
+    <div class="section-label">Pipeline Flow</div>
+    <div class="flow-row">
+      <div class="flow-box trigger">
+        <div class="name">git push</div>
+        <div class="sub">to main</div>
+      </div>
+      <div class="flow-arrow"><span>→</span></div>
+      <div class="flow-box smoke">
+        <div class="name">Smoke Tests</div>
+        <div class="sub">@smoke scenarios</div>
+      </div>
+      <div class="flow-arrow">
+        <span>→</span>
+        <div class="cond">if passed</div>
+      </div>
+      <div class="flow-box gate">
+        <div class="name">✓ Quality Gate</div>
+        <div class="sub">blocks if smoke fails</div>
+      </div>
+      <div class="flow-arrow">
+        <span>→</span>
+        <div class="cond">auto-triggers</div>
+      </div>
+      <div class="flow-box regress">
+        <div class="name">Regression Tests</div>
+        <div class="sub">@regression scenarios</div>
+      </div>
+      <div class="flow-arrow"><span>→</span></div>
+      <div class="flow-box report">
+        <div class="name">Reports Published</div>
+        <div class="sub">Allure + Dashboard</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── DATA FLOW ── -->
+  <div class="data-section">
+    <div class="section-label">Data Flow per Scenario</div>
+    <div class="data-grid">
+      <div class="data-card" style="--data-color: var(--accent3)">
+        <div class="dc-label">Step 1</div>
+        <div class="dc-title">Scenario Starts</div>
+        <ul class="dc-items">
+          <li>PicoContainer creates TestContext</li>
+          <li>@Before hooks fire (order 0 → 1)</li>
+          <li>Scenario name registered</li>
+          <li>Playwright tracing starts</li>
+        </ul>
+      </div>
+      <div class="data-card" style="--data-color: var(--accent)">
+        <div class="dc-label">Step 2</div>
+        <div class="dc-title">Browser Opens (Lazy)</div>
+        <ul class="dc-items">
+          <li>First getPage() call opens browser</li>
+          <li>DriverFactory launches Playwright</li>
+          <li>BrowserContext created with video</li>
+          <li>ElementUtils wired to Page</li>
+        </ul>
+      </div>
+      <div class="data-card" style="--data-color: var(--accent2)">
+        <div class="dc-label">Step 3</div>
+        <div class="dc-title">Steps Execute</div>
+        <ul class="dc-items">
+          <li>Step calls Page Object method</li>
+          <li>Page Object uses ElementUtils</li>
+          <li>ElementUtils tries selectors in order</li>
+          <li>Test data fetched from Excel cache</li>
+        </ul>
+      </div>
+      <div class="data-card" style="--data-color: var(--accent4)">
+        <div class="dc-label">Step 4</div>
+        <div class="dc-title">Scenario Ends</div>
+        <ul class="dc-items">
+          <li>@After hooks fire (order 3 → 0)</li>
+          <li>Screenshot / trace captured if failed</li>
+          <li>Video saved or deleted</li>
+          <li>Browser closed, ThreadLocal cleared</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── LEGEND ── -->
+  <div class="legend">
+    <div class="section-label" style="margin-bottom:0; flex: 0 0 100%">Legend</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div>Playwright / Browser layer</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--accent2)"></div>Data layer</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--accent3)"></div>CI/CD / Trigger layer</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--accent4)"></div>Config / DI layer</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#fbbf24"></div>Quality gate / Rerun</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#f472b6"></div>Hooks / Lifecycle</div>
+  </div>
+
+</div>
+</body>
+</html>
