@@ -76,6 +76,8 @@ public class ExcelReader {
         // "env" is passed as a Maven flag (-Denv=qa) or defaults to "QA"
         String env = System.getProperty("env", "QA");
         String filePath = System.getProperty("user.dir") + "/src/test/resources/testdata/" + env.trim().toLowerCase() + "/TestData.xlsx";
+
+        //Validate if file exist for current environment, if not present do fastfail with a clear message
         File testData = new File(filePath);
         if (!testData.exists()) {
             throw new RuntimeException(
