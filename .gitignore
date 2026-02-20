@@ -32,6 +32,9 @@ test-output/
 screenshots/
 videos/
 traces/
+allure-report-smoke/
+allure-report-regression/
+
 # If you use a custom failed scenarios file
 failed_scenarios.txt
 
