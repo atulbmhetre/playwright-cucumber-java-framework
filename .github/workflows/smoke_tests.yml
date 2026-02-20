@@ -190,7 +190,8 @@ jobs:
 
           # ── Cleanup old smoke builds (keep last MAX_BUILDS) ──
           cd smoke-report
-          ls -d build-* 2>/dev/null | sort -t- -k2 -n | head -n -${MAX_BUILDS} | xargs rm -rf 2>/dev/null || true
+          # Cleanup old smoke builds keeping last MAX_BUILDS
+          ls -d build-* 2>/dev/null | awk -F'[-m]' '{print ($2=="m" ? $3 : $2), $0}' | sort -n | head -n -${MAX_BUILDS} | awk '{print $2}' | xargs rm -rf 2>/dev/null || true
           cd ..
 
           # ── Generate unified index page ──
