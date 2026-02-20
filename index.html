@@ -52,7 +52,9 @@
     </table>
   </div>
   <script>
-    const repoUrl = "https://atulbmhetre.github.io/playwright-cucumber-java-framework";
+    const repoUrl = "https://atulbmhetre.github.io/playwright-cucumber-java-framework"; // Replaced at runtime by sed command below
+
+    // Safely fetches a URL — returns null if not found (instead of crashing)
     async function safeFetch(url) {
       try {
         const r = await fetch(url);
@@ -60,9 +62,12 @@
         return (await r.text()).trim();
       } catch { return null; }
     }
+
     async function loadBuilds() {
       const tbody = document.getElementById("tbody");
       const rows = [];
+
+      // Check build numbers 1–200 for smoke and regression metadata files
       const checks = Array.from({length: 200}, (_, i) => i + 1);
       const smokeResults = await Promise.all(
         checks.map(n => safeFetch(`${repoUrl}/build-meta/smoke-${n}.txt`).then(v => v !== null ? n : null))
@@ -70,12 +75,18 @@
       const regressionResults = await Promise.all(
         checks.map(n => safeFetch(`${repoUrl}/build-meta/regression-${n}.txt`).then(v => v !== null ? n : null))
       );
+
       const smokeBuilds = smokeResults.filter(n => n !== null);
+      // Regression-only builds = regression ran but smoke didn't (e.g. manually triggered regression)
       const regressionOnly = regressionResults.filter(n => n !== null && !smokeBuilds.includes(n));
+
+      // Also include any manually triggered regression builds from manifest file
       const manifestText = await safeFetch(`${repoUrl}/build-meta/manual-regression-builds.txt`);
       const manualBuilds = manifestText ? manifestText.split("\n").map(s => s.trim()).filter(Boolean) : [];
+
       const allBuildIds = [...new Set([...smokeBuilds, ...regressionOnly, ...manualBuilds])];
-      // Get timestamps for all builds to sort by actual execution time
+
+      // Sort all builds by their actual run timestamp (newest first)
       const buildTimes = await Promise.all(allBuildIds.map(async id => {
         const smokeRaw2 = await safeFetch(`${repoUrl}/build-meta/smoke-${id}.txt`);
         const regRaw2 = await safeFetch(`${repoUrl}/build-meta/regression-${id}.txt`);
@@ -83,11 +94,15 @@
         const regTs = regRaw2 && regRaw2.includes('|') ? parseInt(regRaw2.split('|')[1]) : 0;
         return { id, ts: Math.max(smokeTs, regTs) };
       }));
+
+      // Show only last 20 builds sorted by most recent
       const allBuilds = buildTimes.sort((a,b) => b.ts - a.ts).slice(0,20).map(x => x.id);
+
       if (allBuilds.length === 0) {
         tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#aaa;padding:30px">No builds found yet</td></tr>';
         return;
       }
+
       tbody.innerHTML = "";
       for (const build of allBuilds) {
         const smokeRaw = await safeFetch(`${repoUrl}/build-meta/smoke-${build}.txt`);
@@ -95,6 +110,8 @@
         const smokeStatus = smokeRaw ? smokeRaw.split('|')[0] : null;
         const regressionStatus = regressionRaw ? regressionRaw.split('|')[0] : null;
         const triggerType = await safeFetch(`${repoUrl}/build-meta/smoke-trigger-${build}.txt`);
+
+        // Build the smoke status badge (green/red/grey)
         const smokeBadge = smokeStatus === null
           ? '<span class="na">—</span>'
           : smokeStatus === 'success'
@@ -102,18 +119,25 @@
           : smokeStatus === 'failure'
           ? '<span class="badge fail">❌ FAILED</span>'
           : '<span class="badge pending">UNKNOWN</span>';
+
+        // Build the regression badge — explains WHY regression didn't run if applicable
         const regressionBadge = regressionStatus === null
           ? (triggerType === 'manual' ? '<span class="na">Manual smoke — regression skipped</span>' : '<span class="na">Smoke failed — regression skipped</span>')
           : regressionStatus === 'success'
           ? '<span class="badge pass">✅ PASSED</span>'
           : '<span class="badge fail">❌ FAILED</span>';
+
+        // Build clickable links to the actual Allure reports
         const smokeLink = smokeStatus === null
         ? '<span class="na">—</span>'
         : `<a href="${repoUrl}/smoke-report/build-${build}/index.html" target="_blank">View Report</a>`;
         const regressionLink = regressionStatus === null
           ? '<span class="na">—</span>'
           : `<a href="${repoUrl}/regression-report/build-${build}/index.html" target="_blank">View Report</a>`;
+
+        // Label: show "Manual #N" for manual runs, "#N" for auto runs
         const buildLabel = String(build).startsWith('m') ? `Manual #${build.slice(1)}` : (triggerType === 'manual' ? `Manual #${build}` : `#${build}`);
+
         tbody.innerHTML += `<tr>
           <td><strong>${buildLabel}</strong></td>
           <td>${smokeBadge}</td>
