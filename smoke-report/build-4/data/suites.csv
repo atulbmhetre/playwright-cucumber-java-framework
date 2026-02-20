@@ -1,0 +1,3 @@
+"DESCRIPTION","DURATION IN MS","NAME","PARENT SUITE","START TIME","STATUS","STOP TIME","SUB SUITE","SUITE","TEST CLASS","TEST METHOD"
+"","21950","Successful login with admin credentials","","2026-02-20","passed","2026-02-20","","User Authentication","Successful login with admin credentials",""
+"","17051","Invalid login using direct feature data","","2026-02-20","passed","2026-02-20","","User Authentication","Invalid login using direct feature data",""
