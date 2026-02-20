@@ -1,0 +1,63 @@
+# --- Build Artifacts (Maven) ---
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+# Keep the wrapper jar if you use it, but usually target/ handles this
+!.mvn/wrapper/maven-wrapper.jar
+
+# --- Compiled Java ---
+*.class
+*.jar
+*.war
+*.ear
+
+# --- Playwright Specific (IMPORTANT) ---
+# Playwright binaries are heavy; never push them.
+# The ~/.cache is usually outside your project, but keep these for local safety.
+ms-playwright/
+.auth/
+auth.json
+
+# --- Test Results & Framework Reports ---
+# These are generated per run; keep the repo light.
+allure-results/
+allure-report/
+test-output/
+screenshots/
+videos/
+traces/
+allure-report-smoke/
+allure-report-regression/
+
+# If you use a custom failed scenarios file
+failed_scenarios.txt
+
+# --- IDEs (IntelliJ, Eclipse, VS Code) ---
+.idea/
+*.iml
+*.iws
+*.ipr
+.classpath
+.project
+.settings/
+.factorypath
+.vscode/
+.nb-gradle/
+nbproject/
+build/
+
+# --- Operating System ---
+.DS_Store
+Thumbs.db
+
+# --- Logs ---
+*.log
+
+# Allure history folder (updates automatically during runs)
+allure-history-backup/history/

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="WARN">
+    <Appenders>
+        <File name="File" fileName="test-output/logs/framework_${date:ddMMyyyy_HHmmss}.log"  immediateFlush="true">
+            <PatternLayout pattern="%d{HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n"/>
+        </File>
+        <Console name="Console" target="SYSTEM_OUT">
+            <PatternLayout pattern="%d{HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n"/>
+        </Console>
+    </Appenders>
+
+    <Loggers>
+        <Logger name="com.microsoft.playwright" level="WARN" />
+        <Logger name="org.testng" level="WARN" />
+        <Logger name="org.apache.poi" level="WARN" />
+        <Logger name="com.samtech.qa" level="DEBUG" />
+        <Root level="DEBUG">
+            <AppenderRef ref="Console" level="INFO"/>
+            <AppenderRef ref="File" level="DEBUG"/>
+        </Root>
+    </Loggers>
+</Configuration>

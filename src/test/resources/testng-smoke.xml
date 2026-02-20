@@ -1,0 +1,13 @@
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+<suite name="OrangeHRM Suite">
+    <test name="Smoke Tests">
+        <classes>
+            <class name="com.samtech.qa.runners.SmokeTestsRunner"/>
+        </classes>
+    </test>
+    <test name="Retry Failed Tests">
+        <classes>
+            <class name="com.samtech.qa.runners.FailedTestRunner"/>
+        </classes>
+    </test>
+</suite>

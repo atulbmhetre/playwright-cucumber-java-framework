@@ -1,0 +1,477 @@
+# ============================================================
+# SMOKE TESTS WORKFLOW
+# ------------------------------------------------------------
+# This workflow runs a quick set of "smoke tests" to verify
+# that the core features of the application are working.
+#
+# It runs automatically when code is pushed to the main branch,
+# OR can be triggered manually with custom options.
+#
+# After tests finish, it:
+#   - Generates a visual Allure HTML report
+#   - Publishes the report to GitHub Pages (a live website)
+#   - Keeps the last 20 builds for reference
+#   - Blocks the pipeline if any smoke test fails
+# ============================================================
+
+name: Smoke Tests Execution
+
+# ── When does this workflow run? ──────────────────────────────
+on:
+  push:
+    branches: [main]              # Auto-triggers on every push to main branch
+
+  workflow_dispatch:              # Allows manual trigger from GitHub Actions UI
+    inputs:
+      env:
+        description: 'Test environment'          # Which environment to test (e.g. qa, staging)
+        default: 'qa'
+      browser:
+        description: 'Browser to run tests'      # Which browser to use for tests
+        default: 'chromium'
+      headless:
+        description: 'Headless mode'             # true = browser runs invisibly (faster, for CI)
+        default: 'true'
+      threadcount:
+        description: 'Parallel threads'          # How many tests run at the same time
+        default: '1'
+      tag:
+        description: 'Cucumber tags'             # Which test group to run (e.g. @smoke, @login)
+        default: '@smoke'
+
+jobs:
+  smoke-job:
+    runs-on: ubuntu-latest        # Runs on a fresh Linux machine provided by GitHub
+
+    steps:
+
+      # ─────────────────────────────────────────
+      # 1️⃣  Checkout main branch
+      # Downloads your project code onto the CI machine
+      # so the workflow can build and run it.
+      # ─────────────────────────────────────────
+      - name: Checkout Main
+        uses: actions/checkout@v4
+
+      # ─────────────────────────────────────────
+      # 2️⃣  Setup Java 21
+      # Installs Java (required to run Maven + your framework).
+      # Uses Temurin — a free, open-source Java distribution.
+      # ─────────────────────────────────────────
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      # ─────────────────────────────────────────
+      # 3️⃣  Install Allure CLI
+      # Allure is the tool that converts raw test result files
+      # into a beautiful, interactive HTML report.
+      # ─────────────────────────────────────────
+      - name: Install Allure CLI
+        run: npm install -g allure-commandline
+
+      # ─────────────────────────────────────────
+      # 4️⃣  Install Playwright browsers
+      # Playwright needs actual browser binaries to run tests.
+      # This command downloads Chromium (and other browsers)
+      # along with all system dependencies they need.
+      # ─────────────────────────────────────────
+      - name: Install Playwright Browsers
+        run: mvn exec:java -e -D exec.mainClass=com.microsoft.playwright.CLI -D exec.args="install --with-deps" -D exec.classpathScope=test
+
+      # ─────────────────────────────────────────
+      # 5️⃣  Restore shared Allure history from gh-pages
+      # Allure can show trend graphs (pass/fail over time)
+      # but only if it has access to previous build history.
+      # We store that history in the gh-pages branch and
+      # restore it here before generating the new report.
+      # continue-on-error: true → won't fail if gh-pages
+      # doesn't exist yet (e.g. very first run).
+      # ─────────────────────────────────────────
+      - name: Checkout gh-pages for History
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: gh-pages
+        continue-on-error: true
+
+      # ─────────────────────────────────────────
+      # 6️⃣  Run Smoke Tests
+      # Executes the actual tests using Maven + TestNG.
+      # Key points:
+      #   - xvfb-run: creates a virtual display so browsers
+      #     can render even though there's no real screen on CI
+      #   - mvn clean test: cleans old results, then runs tests
+      #   - All options (browser, env, tags etc.) are passed in
+      #     as system properties so tests pick them up at runtime
+      #   - continue-on-error: true → the workflow keeps going
+      #     even if tests fail (so reports are still generated)
+      # ─────────────────────────────────────────
+      - name: Run Smoke Tests
+        id: run
+        continue-on-error: true
+        run: |
+          xvfb-run --auto-servernum -- mvn clean test \
+            -Dtestng.suite.file=testng-smoke.xml \
+            -Dcucumber.filter.tags="${{ github.event.inputs.tag || '@smoke' }}" \
+            -Denv="${{ github.event.inputs.env || 'qa' }}" \
+            -Dbrowser="${{ github.event.inputs.browser || 'chromium' }}" \
+            -Dheadless="${{ github.event.inputs.headless || 'true' }}" \
+            -Dparallel.thread.count="${{ github.event.inputs.threadcount || '1' }}" \
+            -Dallure.results.directory=target/allure-results
+
+      # ─────────────────────────────────────────
+      # History is restored AFTER tests run (not before)
+      # because "mvn clean" wipes the target/ folder.
+      # Restoring before tests would delete the history.
+      # ─────────────────────────────────────────
+      - name: Restore Shared History into allure-results
+        if: always()     # Runs even if previous steps failed
+        run: |
+          mkdir -p target/allure-results/history
+          if [ -d gh-pages/allure-history/shared/history ]; then
+            echo "✅ Shared history found — restoring after test run"
+            cp -r gh-pages/allure-history/shared/history/. target/allure-results/history/
+          else
+            echo "ℹ️  No shared history yet — first run"
+          fi
+
+      # ─────────────────────────────────────────
+      # 7️⃣  Debug — verify outputs
+      # Prints folder contents to CI logs so you can confirm
+      # that test results, history, and reports were created.
+      # 💡 Safe to remove once everything is confirmed working.
+      # ─────────────────────────────────────────
+      - name: Debug — Verify Output Paths
+        if: always()
+        run: |
+          echo "====== target/allure-results ======"
+          ls -la target/allure-results/ || echo "❌ NOT FOUND"
+          echo "====== history ======"
+          ls -la target/allure-results/history/ || echo "❌ history empty or missing"
+          echo "====== environment.properties ======"
+          cat target/allure-results/environment.properties || echo "❌ NOT FOUND"
+          echo "====== test-output ======"
+          find . -path ./gh-pages -prune -o -name "failedLocators_*.json" -print
+          echo "====== defect-age-report ======"
+          find . -path ./gh-pages -prune -o -name "defect-age-report.csv" -print
+
+      # ─────────────────────────────────────────
+      # 8️⃣  Generate Defect Age Report
+      # Runs a custom Java utility that analyzes how long
+      # each failing test has been failing across builds.
+      # Output is a CSV file (defect-age-report.csv) which
+      # gets attached to the Allure report.
+      # ─────────────────────────────────────────
+      - name: Generate Defect Age Report
+        if: always()
+        run: |
+          mvn exec:java \
+            -Dexec.mainClass="com.samtech.qa.testutilities.AllureDefectAge" \
+            -Dexec.classpathScope=test \
+            -Denv="${{ github.event.inputs.env || 'qa' }}" \
+            -Dbrowser="${{ github.event.inputs.browser || 'chromium' }}" \
+            -Dheadless="${{ github.event.inputs.headless || 'true' }}"
+          echo "====== defect-age-report.csv ======"
+          cat target/defect-age-report.csv || echo "❌ not generated"
+
+      # ─────────────────────────────────────────
+      # 9️⃣  Generate Allure HTML Report
+      # Converts raw JSON result files from target/allure-results
+      # into a full interactive HTML report (allure-report-smoke/).
+      # The --clean flag ensures no leftover files from old runs.
+      # ─────────────────────────────────────────
+      - name: Generate Allure Report
+        if: always()
+        run: |
+          allure generate target/allure-results -o allure-report-smoke --clean
+          echo "====== allure-report-smoke/history ======"
+          ls allure-report-smoke/history/ || echo "❌ history missing"
+
+      # ─────────────────────────────────────────
+      # 🔟  Publish to GitHub Pages
+      # This step does several things:
+      #   1. Saves the latest Allure history (for trend graphs)
+      #   2. Saves this build's report as a versioned snapshot
+      #   3. Writes metadata (pass/fail + timestamp) for the dashboard
+      #   4. Cleans up old builds (keeps last 20 only)
+      #   5. Regenerates the dashboard index.html page
+      #   6. Commits and pushes everything to the gh-pages branch
+      #      which GitHub automatically publishes as a website
+      # ─────────────────────────────────────────
+      - name: Update gh-pages — History + Versioned Report + Index
+        if: always()
+        run: |
+          BUILD=${{ github.run_number }}
+          REPO_NAME=$(echo '${{ github.repository }}' | cut -d'/' -f2)
+          REPO_URL="https://${{ github.repository_owner }}.github.io/${REPO_NAME}"
+          MAX_BUILDS=20
+
+          # ── Clone gh-pages or create it fresh if it doesn't exist ──
+          rm -rf gh-pages-push
+          if git clone --branch gh-pages --single-branch \
+            https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git \
+            gh-pages-push 2>/dev/null; then
+            echo "✅ gh-pages branch cloned"
+          else
+            # First time setup — gh-pages branch doesn't exist yet, so create it
+            echo "ℹ️  gh-pages branch does not exist — creating fresh"
+            mkdir gh-pages-push
+            cd gh-pages-push
+            git init
+            git config user.name  "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git remote add origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+            git checkout --orphan gh-pages
+            git commit --allow-empty -m "chore: init gh-pages [skip ci]"
+            git push origin gh-pages
+            cd ..
+          fi
+
+          cd gh-pages-push
+
+          # ── Save shared Allure history (used for trend graphs in future builds) ──
+          mkdir -p allure-history/shared
+          rm -rf allure-history/shared/history
+          cp -r ../allure-report-smoke/history allure-history/shared/history
+
+          # ── Save a versioned copy of this build's smoke report ──
+          mkdir -p smoke-report/build-${BUILD}
+          cp -r ../allure-report-smoke/. smoke-report/build-${BUILD}/
+
+          # ── Write build metadata: outcome (success/failure) + Unix timestamp ──
+          mkdir -p build-meta
+          echo "${{ steps.run.outcome }}|$(date +%s)" > build-meta/smoke-${BUILD}.txt
+
+          # ── Record how this smoke run was triggered (auto push vs manual) ──
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "push" > build-meta/smoke-trigger-${BUILD}.txt
+          else
+            echo "manual" > build-meta/smoke-trigger-${BUILD}.txt
+          fi
+
+          # ── Remove oldest builds if we exceed MAX_BUILDS limit ──
+          # Sorts build folders numerically and deletes the oldest ones
+          cd smoke-report
+          ls -d build-* 2>/dev/null | awk -F'[-m]' '{print ($2=="m" ? $3 : $2), $0}' | sort -n | head -n -${MAX_BUILDS} | awk '{print $2}' | xargs rm -rf 2>/dev/null || true
+          cd ..
+
+          # ── Generate the dashboard index page ──
+          # This is a self-contained HTML page that dynamically loads
+          # build metadata and shows pass/fail status + report links
+          # for both smoke and regression builds in a single table.
+          cat > index.html << 'HTMLEOF'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+            <meta charset="UTF-8"/>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+            <title>Test Reports Dashboard</title>
+            <style>
+              * { box-sizing: border-box; margin: 0; padding: 0; }
+              body { font-family: Arial, sans-serif; background: #f5f5f5; }
+              header { background: #2c3e50; color: white; padding: 20px 40px; }
+              header h1 { font-size: 22px; }
+              header p { margin-top: 4px; opacity: 0.7; font-size: 12px; }
+              .container { max-width: 1100px; margin: 30px auto; padding: 0 20px; }
+              table { width: 100%; border-collapse: collapse; background: white;
+                      border-radius: 8px; overflow: hidden;
+                      box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+              th { background: #2c3e50; color: white; padding: 14px 16px;
+                   text-align: left; font-size: 13px; }
+              td { padding: 12px 16px; border-bottom: 1px solid #eee; font-size: 13px; }
+              tr:last-child td { border-bottom: none; }
+              tr:hover td { background: #f9f9f9; }
+              .badge { display: inline-block; padding: 3px 10px; border-radius: 12px;
+                       font-size: 11px; font-weight: bold; }
+              .pass { background: #d4edda; color: #155724; }
+              .fail { background: #f8d7da; color: #721c24; }
+              .pending { background: #fff3cd; color: #856404; }
+              a { color: #2980b9; text-decoration: none; font-weight: 500; }
+              a:hover { text-decoration: underline; }
+              .na { color: #aaa; font-style: italic; }
+              #loading { text-align: center; padding: 40px; color: #aaa; }
+            </style>
+          </head>
+          <body>
+            <header>
+              <h1>🧪 Test Reports Dashboard</h1>
+              <p>Smoke &amp; Regression — Last 20 Builds</p>
+            </header>
+            <div class="container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Build</th>
+                    <th>Smoke Status</th>
+                    <th>Smoke Report</th>
+                    <th>Regression Status</th>
+                    <th>Regression Report</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody">
+                  <tr><td colspan="5" id="loading">Loading builds...</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <script>
+              const repoUrl = "REPO_URL_PLACEHOLDER"; // Replaced at runtime by sed command below
+
+              // Safely fetches a URL — returns null if not found (instead of crashing)
+              async function safeFetch(url) {
+                try {
+                  const r = await fetch(url);
+                  if (!r.ok) return null;
+                  return (await r.text()).trim();
+                } catch { return null; }
+              }
+
+              async function loadBuilds() {
+                const tbody = document.getElementById("tbody");
+                const rows = [];
+
+                // Check build numbers 1–200 for smoke and regression metadata files
+                const checks = Array.from({length: 200}, (_, i) => i + 1);
+                const smokeResults = await Promise.all(
+                  checks.map(n => safeFetch(`${repoUrl}/build-meta/smoke-${n}.txt`).then(v => v !== null ? n : null))
+                );
+                const regressionResults = await Promise.all(
+                  checks.map(n => safeFetch(`${repoUrl}/build-meta/regression-${n}.txt`).then(v => v !== null ? n : null))
+                );
+
+                const smokeBuilds = smokeResults.filter(n => n !== null);
+                // Regression-only builds = regression ran but smoke didn't (e.g. manually triggered regression)
+                const regressionOnly = regressionResults.filter(n => n !== null && !smokeBuilds.includes(n));
+
+                // Also include any manually triggered regression builds from manifest file
+                const manifestText = await safeFetch(`${repoUrl}/build-meta/manual-regression-builds.txt`);
+                const manualBuilds = manifestText ? manifestText.split("\n").map(s => s.trim()).filter(Boolean) : [];
+
+                const allBuildIds = [...new Set([...smokeBuilds, ...regressionOnly, ...manualBuilds])];
+
+                // Sort all builds by their actual run timestamp (newest first)
+                const buildTimes = await Promise.all(allBuildIds.map(async id => {
+                  const smokeRaw2 = await safeFetch(`${repoUrl}/build-meta/smoke-${id}.txt`);
+                  const regRaw2 = await safeFetch(`${repoUrl}/build-meta/regression-${id}.txt`);
+                  const smokeTs = smokeRaw2 && smokeRaw2.includes('|') ? parseInt(smokeRaw2.split('|')[1]) : 0;
+                  const regTs = regRaw2 && regRaw2.includes('|') ? parseInt(regRaw2.split('|')[1]) : 0;
+                  return { id, ts: Math.max(smokeTs, regTs) };
+                }));
+
+                // Show only last 20 builds sorted by most recent
+                const allBuilds = buildTimes.sort((a,b) => b.ts - a.ts).slice(0,20).map(x => x.id);
+
+                if (allBuilds.length === 0) {
+                  tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#aaa;padding:30px">No builds found yet</td></tr>';
+                  return;
+                }
+
+                tbody.innerHTML = "";
+                for (const build of allBuilds) {
+                  const smokeRaw = await safeFetch(`${repoUrl}/build-meta/smoke-${build}.txt`);
+                  const regressionRaw = await safeFetch(`${repoUrl}/build-meta/regression-${build}.txt`);
+                  const smokeStatus = smokeRaw ? smokeRaw.split('|')[0] : null;
+                  const regressionStatus = regressionRaw ? regressionRaw.split('|')[0] : null;
+                  const triggerType = await safeFetch(`${repoUrl}/build-meta/smoke-trigger-${build}.txt`);
+
+                  // Build the smoke status badge (green/red/grey)
+                  const smokeBadge = smokeStatus === null
+                    ? '<span class="na">—</span>'
+                    : smokeStatus === 'success'
+                    ? '<span class="badge pass">✅ PASSED</span>'
+                    : smokeStatus === 'failure'
+                    ? '<span class="badge fail">❌ FAILED</span>'
+                    : '<span class="badge pending">UNKNOWN</span>';
+
+                  // Build the regression badge — explains WHY regression didn't run if applicable
+                  const regressionBadge = regressionStatus === null
+                    ? (triggerType === 'manual' ? '<span class="na">Manual smoke — regression skipped</span>' : '<span class="na">Smoke failed — regression skipped</span>')
+                    : regressionStatus === 'success'
+                    ? '<span class="badge pass">✅ PASSED</span>'
+                    : '<span class="badge fail">❌ FAILED</span>';
+
+                  // Build clickable links to the actual Allure reports
+                  const smokeLink = smokeStatus === null
+                  ? '<span class="na">—</span>'
+                  : `<a href="${repoUrl}/smoke-report/build-${build}/index.html" target="_blank">View Report</a>`;
+                  const regressionLink = regressionStatus === null
+                    ? '<span class="na">—</span>'
+                    : `<a href="${repoUrl}/regression-report/build-${build}/index.html" target="_blank">View Report</a>`;
+
+                  // Label: show "Manual #N" for manual runs, "#N" for auto runs
+                  const buildLabel = String(build).startsWith('m') ? `Manual #${build.slice(1)}` : (triggerType === 'manual' ? `Manual #${build}` : `#${build}`);
+
+                  tbody.innerHTML += `<tr>
+                    <td><strong>${buildLabel}</strong></td>
+                    <td>${smokeBadge}</td>
+                    <td>${smokeLink}</td>
+                    <td>${regressionBadge}</td>
+                    <td>${regressionLink}</td>
+                  </tr>`;
+                }
+              }
+              loadBuilds();
+            </script>
+          </body>
+          </html>
+          HTMLEOF
+
+          # Replace the placeholder with the actual GitHub Pages URL
+          sed -i "s|REPO_URL_PLACEHOLDER|${REPO_URL}|g" index.html
+
+          # ── Commit and push all changes to gh-pages ──
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          # Only commit if there are actual changes (avoids empty commits)
+          git diff --cached --quiet \
+            && echo "ℹ️  No changes to commit" \
+            || git commit -m "chore(smoke): build #${BUILD} [skip ci]"
+          git pull --rebase origin gh-pages || true   # Sync with remote before pushing
+          git push origin gh-pages
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}   # Auto-provided by GitHub — no setup needed
+
+      # ─────────────────────────────────────────
+      # 1️⃣1️⃣  Upload artifacts
+      # Saves key output files directly in GitHub Actions UI
+      # so you can download and inspect them manually.
+      # Kept for 30 days. Includes:
+      #   - Raw Allure results (JSON files)
+      #   - Generated HTML report
+      #   - Defect age CSV
+      #   - Failed locators JSON (for debugging flaky selectors)
+      #   - Test logs
+      # ─────────────────────────────────────────
+      - name: Upload Smoke Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-artifacts-build-${{ github.run_number }}
+          if-no-files-found: warn
+          retention-days: 30
+          path: |
+            target/allure-results/
+            allure-report-smoke/
+            target/defect-age-report.csv
+            test-output/failedLocators_*.json
+            test-output/logs/
+
+      # ─────────────────────────────────────────
+      # 1️⃣2️⃣  Fail the build if smoke tests failed
+      # We used continue-on-error: true in the test step
+      # so reports could still be generated even on failure.
+      # This final step now enforces the actual pass/fail
+      # outcome — failing the pipeline if tests didn't pass.
+      # ─────────────────────────────────────────
+      - name: Fail Build on Smoke Failure
+        if: always()
+        run: |
+          if [ "${{ steps.run.outcome }}" = "failure" ]; then
+            echo "❌ Smoke tests FAILED — blocking pipeline"
+            exit 1
+          else
+            echo "✅ All smoke tests passed"
+          fi
