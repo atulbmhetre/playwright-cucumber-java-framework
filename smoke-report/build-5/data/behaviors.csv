@@ -1,0 +1,3 @@
+"BROKEN","EPIC","FAILED","FEATURE","PASSED","SKIPPED","STORY","UNKNOWN"
+"1","","0","User Authentication","0","0","Invalid login using direct feature data","0"
+"1","","0","User Authentication","0","0","Successful login with admin credentials","0"
